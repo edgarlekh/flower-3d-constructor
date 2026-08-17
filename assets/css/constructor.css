@@ -48,10 +48,11 @@ body{
 }
 .row{
   display:flex;align-items:center;gap:11px;padding:9px 16px;
-  transition:background .15s;
+  border-left:2px solid transparent;
+  transition:background .15s,border-color .15s;
 }
 .row:hover{background:var(--panel-2)}
-.row.on{background:var(--panel-2)}
+.row.on{background:var(--panel-2);border-left-color:var(--rose)}
 .dot{
   width:15px;height:15px;border-radius:50%;flex:none;
   box-shadow:0 0 0 1px rgba(255,255,255,.16) inset;
@@ -100,13 +101,19 @@ canvas{display:block;touch-action:none}
 }
 #empty .serif{font-size:22px;color:#8C8880;font-weight:400}
 #empty p{font-size:13px;color:#A5A199;margin-top:8px}
-#tools{position:absolute;top:14px;right:14px;display:flex;flex-direction:column;gap:6px;align-items:flex-end;z-index:2}
-#variant,#reset{
-  border:1px solid #D5D1C8;background:rgba(255,255,255,.8);backdrop-filter:blur(6px);
-  color:#4A5B50;border-radius:9px;padding:8px 12px;font-size:12px;cursor:pointer;
-  font-family:inherit;
+#tools{position:absolute;top:14px;right:14px;display:flex;flex-direction:column;gap:6px;align-items:stretch;z-index:2;
+  padding:8px;border-radius:12px;background:rgba(255,255,255,.42);backdrop-filter:blur(7px);border:1px solid rgba(213,209,200,.55)}
+#variant,#relayout,#reset{
+  border:1px solid rgba(210,205,196,.9);background:rgba(255,255,255,.9);
+  color:#4A5B50;border-radius:8px;padding:8px 13px;font-size:12.5px;cursor:pointer;
+  font-family:inherit;white-space:nowrap;transition:border-color .12s,color .12s,background .12s,transform .1s;
 }
-#variant:hover,#reset:hover{border-color:#B8737E;color:#B8737E}
+#variant:hover,#relayout:hover,#reset:hover{border-color:#B8737E;color:#B8737E}
+#variant:active,#relayout:active,#reset:active{transform:translateY(1px)}
+
+/* фокус: видимый только с клавиатуры, без чёрной рамки по клику мышью */
+button:focus:not(:focus-visible){outline:none}
+button:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
 
 /* ---------- recipe ---------- */
 #recipe{
