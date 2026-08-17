@@ -23,6 +23,15 @@
     <button id="add-table" class="primary">+ Стол</button>
     <button id="copy-table">Копия стола</button>
     <button id="del-table" class="danger">Удалить стол</button>
+    <div class="cloth-row" id="cloth-colors">
+      <span class="tlabel" style="padding:0">Скатерть</span>
+      <button class="swatch" data-cloth="F3EEE6" style="background:#F3EEE6" title="Айвори"></button>
+      <button class="swatch" data-cloth="E8D9C5" style="background:#E8D9C5" title="Беж"></button>
+      <button class="swatch" data-cloth="D8C7B0" style="background:#D8C7B0" title="Тауп"></button>
+      <button class="swatch" data-cloth="C9D4C5" style="background:#C9D4C5" title="Шалфей"></button>
+      <button class="swatch" data-cloth="E7C9C0" style="background:#E7C9C0" title="Пудра"></button>
+      <button class="swatch" data-cloth="8A93A5" style="background:#8A93A5" title="Дымчатый"></button>
+    </div>
   </div>
   <div class="tgroup">
     <span class="tlabel">Композиция</span>
@@ -515,6 +524,14 @@
   document.getElementById('g-minus').addEventListener('click', () => { if(selected){ selected.userData.seats=Math.max(2,selected.userData.seats-1); buildSettings(selected); afterChange(false);} });
   document.getElementById('g-plus').addEventListener('click',  () => { if(selected){ selected.userData.seats=Math.min(14,selected.userData.seats+1); buildSettings(selected); afterChange(false);} });
   document.getElementById('reset').addEventListener('click', () => frameAll());
+  document.getElementById('cloth-colors').addEventListener('click', (e) => {
+    const hex=e.target.dataset.cloth; if(!hex) return;
+    clothMat.color.setHex(parseInt(hex,16));
+    [...document.querySelectorAll('#cloth-colors .swatch')].forEach(b=>b.classList.toggle('on', b===e.target));
+    try{ localStorage.setItem('flowerCloth', hex); }catch(_){}
+  });
+  (function(){ const sc=localStorage.getItem('flowerCloth'); if(sc){ clothMat.color.setHex(parseInt(sc,16));
+    const b=document.querySelector(`#cloth-colors .swatch[data-cloth="${sc}"]`); if(b)b.classList.add('on'); } })();
   document.getElementById('walk-btn').addEventListener('click', () => enterWalk());
   document.getElementById('exit-walk').addEventListener('click', () => exitWalk());
   document.getElementById('stand-btn').addEventListener('click', () => standUp());
