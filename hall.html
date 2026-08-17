@@ -32,7 +32,10 @@
   <div class="tgroup">
     <span class="tlabel">Помещение</span>
     <button id="load-venue">⤓ Загрузить зал (GLB)</button>
-    <button id="clear-venue" style="display:none">Убрать зал</button>
+    <div id="venue-adjust" style="display:none;gap:6px;flex-direction:column">
+      <div style="display:flex;gap:6px"><button id="venue-rot-l" style="flex:1">⟲ Повернуть</button><button id="venue-rot-r" style="flex:1">Повернуть ⟳</button></div>
+      <button id="clear-venue">Убрать зал</button>
+    </div>
   </div>
   <button id="reset">Показать все</button>
   <button id="walk-btn" class="walk">◆ Пройтись по залу</button>
@@ -531,7 +534,7 @@
       m.position.x-=c.x; m.position.z-=c.z; m.position.y-=box.min.y;   // на пол, по центру
       m.traverse(o=>{ if(o.isMesh){ o.receiveShadow=true; o.castShadow=true; if(o.material) o.material.side=THREE.DoubleSide; } });
       scene.add(m); venueModel=m; floor.visible=false;
-      document.getElementById('clear-venue').style.display='';
+      document.getElementById('venue-adjust').style.display='flex';
       const d=new THREE.Box3().setFromObject(m).getSize(new THREE.Vector3());
       showMsg(`Зал загружен: ${Math.round(d.x)}×${Math.round(d.z)} см, высота ${Math.round(d.y)} см`);
       frameAll();
@@ -539,7 +542,9 @@
   }
   document.getElementById('load-venue').addEventListener('click', ()=> document.getElementById('venue-file').click());
   document.getElementById('venue-file').addEventListener('change', (e)=>{ const f=e.target.files[0]; if(f) loadVenueFile(f); e.target.value=''; });
-  document.getElementById('clear-venue').addEventListener('click', ()=>{ if(venueModel){ scene.remove(venueModel); venueModel=null; } floor.visible=true; document.getElementById('clear-venue').style.display='none'; showMsg('Стандартный пол возвращён'); });
+  document.getElementById('venue-rot-l').addEventListener('click', ()=>{ if(venueModel) venueModel.rotation.y += Math.PI/12; });
+  document.getElementById('venue-rot-r').addEventListener('click', ()=>{ if(venueModel) venueModel.rotation.y -= Math.PI/12; });
+  document.getElementById('clear-venue').addEventListener('click', ()=>{ if(venueModel){ scene.remove(venueModel); venueModel=null; } floor.visible=true; document.getElementById('venue-adjust').style.display='none'; showMsg('Стандартный пол возвращён'); });
 
   // --- поделиться с клиентом: ссылка со всей расстановкой ---
   document.getElementById('share-btn').addEventListener('click', ()=>{
