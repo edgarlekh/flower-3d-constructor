@@ -21,17 +21,23 @@ window.CATALOG = [
   {id:'gros', type:'flower', name:'Роза садовая белая', role:'accent', bloom_cm:9,   stem_cm:55, price:15, color:0xF2EDE2, shape:'ball'},
   {id:'red',  type:'flower', name:'Роза красная',       role:'accent', bloom_cm:7,   stem_cm:45, price:9,  color:0xAF3648, shape:'ball', model:true},
   {id:'ran',  type:'flower', name:'Ранункулюс персик',  role:'accent', bloom_cm:6.5, stem_cm:40, price:12, color:0xEFBF97, shape:'ball'},
+  {id:'dah',  type:'flower', name:'Георгин бордовый',   role:'accent', bloom_cm:12,  stem_cm:45, price:18, color:0x7E2233, shape:'ball'},
+  {id:'ane',  type:'flower', name:'Анемон белый',       role:'accent', bloom_cm:6,   stem_cm:35, price:14, color:0xF3EFE8, shape:'cup'},
 
   {id:'hyd',  type:'flower', name:'Гортензия голубая',  role:'mass',   bloom_cm:15,  stem_cm:45, price:34, color:0xA6BDDE, shape:'cluster'},
   {id:'tul',  type:'flower', name:'Тюльпан коралловый', role:'mass',   bloom_cm:6,   stem_cm:38, price:7,  color:0xE86F6E, shape:'cup'},
   {id:'eus',  type:'flower', name:'Эустома кремовая',   role:'mass',   bloom_cm:6.5, stem_cm:50, price:11, color:0xF1EADC, shape:'cup'},
   {id:'chr',  type:'flower', name:'Хризантема сирень',  role:'mass',   bloom_cm:8,   stem_cm:55, price:10, color:0xC0A5D4, shape:'ball'},
+  {id:'car',  type:'flower', name:'Гвоздика пыльная роза', role:'mass', bloom_cm:6,  stem_cm:50, price:6,  color:0xC98B93, shape:'ball'},
+  {id:'fre',  type:'flower', name:'Фрезия жёлтая',      role:'mass',   bloom_cm:5,   stem_cm:40, price:9,  color:0xEFD98A, shape:'cup'},
 
   {id:'gyp',  type:'flower', name:'Гипсофила',          role:'filler', bloom_cm:10,  stem_cm:45, price:6,  color:0xFAF6F1, shape:'cluster'},
   {id:'sta',  type:'flower', name:'Статица лавандовая', role:'filler', bloom_cm:8,   stem_cm:40, price:5,  color:0x9B8CBE, shape:'cluster'},
+  {id:'ber',  type:'flower', name:'Гиперикум (ягоды)',  role:'filler', bloom_cm:7,   stem_cm:45, price:7,  color:0x9E4B3A, shape:'cluster'},
 
   {id:'euc',  type:'flower', name:'Эвкалипт',           role:'green',  bloom_cm:20,  stem_cm:55, price:6,  color:0x93A98C, shape:'spray'},
   {id:'rus',  type:'flower', name:'Рускус',             role:'green',  bloom_cm:18,  stem_cm:50, price:5,  color:0x5F7F5C, shape:'spray'},
+  {id:'pis',  type:'flower', name:'Фисташка',           role:'green',  bloom_cm:22,  stem_cm:55, price:7,  color:0x6E8F63, shape:'spray'},
 ];
 
 /* Роли: как объясняем пользователю, зачем группа нужна. */

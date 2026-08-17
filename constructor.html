@@ -155,8 +155,12 @@
     canGrab: () => growT >= 1,                          // только когда букет вырос
     moveTo: moveFlower,
     setCameraPaused: (v) => cam.setPaused(v),
-    onGrab: (g) => { g.userData.head.scale.setScalar(1.14); document.getElementById('hint').classList.add('gone'); },
+    onGrab: (g) => { g.userData.head.scale.setScalar(1.16); document.getElementById('hint').classList.add('gone'); },
     onRelease: (g) => { g.userData.head.scale.setScalar(1); },
+    onHover: (g, prev) => {                          // наведение мышью: лёгкая подсветка
+      if (prev && prev.userData.head) prev.userData.head.scale.setScalar(1);
+      if (g && g.userData.head) g.userData.head.scale.setScalar(1.08);
+    },
   });
 
   function drawVase(){

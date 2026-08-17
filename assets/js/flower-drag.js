@@ -23,7 +23,7 @@ window.createFlowerDrag = function(camera, el, opts){
   const hit = new THREE.Vector3();
   const grabOffset = new THREE.Vector3();
   const camDir = new THREE.Vector3();
-  let active = null, activePointer = null;
+  let active = null, activePointer = null, hovered = null;
 
   function toNDC(e){
     const r = el.getBoundingClientRect();
@@ -61,9 +61,14 @@ window.createFlowerDrag = function(camera, el, opts){
 
   el.addEventListener('pointermove', e => {
     if (!active){
-      // подсказка курсором на компе: над цветком — «схватить»
+      // подсказка на компе: над цветком — курсор «схватить» + лёгкая подсветка
       if (e.pointerType === 'mouse' && opts.canGrab && opts.canGrab()){
-        el.style.cursor = pick(e) ? 'grab' : '';
+        const g = pick(e);
+        el.style.cursor = g ? 'grab' : '';
+        if (g !== hovered){
+          if (opts.onHover) opts.onHover(g, hovered);
+          hovered = g;
+        }
       }
       return;
     }
