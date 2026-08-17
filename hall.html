@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Зал — расстановка на столе</title>
+<title>Зал — расстановка столов</title>
 <link rel="stylesheet" href="assets/css/hall.css">
 </head>
 <body>
@@ -12,38 +12,42 @@
 <div id="topbar">
   <a class="back" href="constructor.html">← В конструктор</a>
   <h1 class="serif">Зал</h1>
-  <span class="guests">Гостей: <button id="g-minus">−</button><b id="guests">6</b><button id="g-plus">+</button></span>
+  <span class="guests">Гостей за столом: <button id="g-minus">−</button><b id="guests">6</b><button id="g-plus">+</button></span>
   <span class="spacer"></span>
-  <span id="readout">Стол ⌀<b>150</b> см · букетов: <b id="count">0</b></span>
+  <span id="readout">Столов: <b id="tcount">0</b> · букетов: <b id="count">0</b></span>
 </div>
 
 <div id="tools">
-  <button id="add" class="primary">+ Копия букета</button>
-  <button id="remove">Убрать</button>
-  <button id="clear">Очистить стол</button>
-  <button id="reset">Вернуть вид</button>
+  <div class="tgroup">
+    <span class="tlabel">Столы</span>
+    <button id="add-table" class="primary">+ Стол</button>
+    <button id="copy-table">Копия стола</button>
+    <button id="del-table">Удалить стол</button>
+  </div>
+  <div class="tgroup">
+    <span class="tlabel">Композиция</span>
+    <button id="add">+ Копия букета</button>
+    <button id="remove">Убрать букет</button>
+  </div>
+  <button id="reset">Показать все</button>
 </div>
 
 <div id="warnings"></div>
 
 <div id="empty" style="display:none">
   <div>
-    <div class="serif">Букет не задан</div>
-    <p>Соберите его в <a href="constructor.html">конструкторе</a> и нажмите «На стол».</p>
+    <div class="serif">Пусто</div>
+    <p>Соберите букет в <a href="constructor.html">конструкторе</a> и нажмите «На стол».</p>
   </div>
 </div>
 
-<div id="hint" class="label">Потяните букет мышью — двигать по столу · пустое место — поворот · колесо — зум</div>
+<div id="hint" class="label">Тяните букет/тарелку — по столу · пустую скатерть — двигаете весь стол · пустое место — поворот</div>
+<div id="loader" class="scene-loader"><div class="spin"></div>Накрываем столы…</div>
 
-<div id="loader" class="scene-loader"><div class="spin"></div>Накрываем стол…</div>
-
-<!-- движок three.js -->
 <script src="assets/js/three.min.js"></script>
-<!-- данные -->
 <script src="assets/catalog/catalog.js"></script>
 <script src="assets/catalog/models/vases.js"></script>
 <script src="assets/catalog/models/rose.js"></script>
-<!-- логика -->
 <script src="assets/js/model-loader.js"></script>
 <script src="assets/js/bouquet-engine.js"></script>
 <script src="assets/js/bouquet-builder.js"></script>
@@ -52,22 +56,17 @@
 
 <script>
 (function(){
-  // --- какой букет ставим: из конструктора (localStorage) или запасной ---
   const DEFAULT = { cart:{red:5, gros:3, euc:4, gyp:3}, vaseId:'tall', variantSeed:0, manual:{} };
-  const HALL_KEY = 'flowerHall';        // сохранённая расстановка стола
-  const PENDING_KEY = 'flowerPending';  // букет, присланный из конструктора «на стол»
-
-  // spec.manual хранится как {key:[x,y,z]}; для сборщика нужен {key:Vector3}
-  function manualVec(specManual){
-    const m = {};
-    if (specManual) for (const k in specManual){ const a = specManual[k]; m[k] = new THREE.Vector3(a[0],a[1],a[2]); }
-    return m;
-  }
+  const HALL_KEY = 'flowerHall', PENDING_KEY = 'flowerPending';
   const readJSON = k => { try { return JSON.parse(localStorage.getItem(k)); } catch(_){ return null; } };
+  const manualVec = m => { const o={}; if(m) for(const k in m){ const a=m[k]; o[k]=new THREE.Vector3(a[0],a[1],a[2]); } return o; };
 
-  const TABLE_R = 75, TABLE_H = 75;     // радиус 75 см (⌀150), высота 75 см
-  const EDGE = TABLE_R - 16;            // букеты держим не у самого края
-  let guests = 6;                        // число гостей = стульев и тарелок
+  // размеры (реальные см)
+  const TABLE_R = 75, TABLE_H = 75, TABLE_TOP = TABLE_H + 0.7;
+  const PLATE_R = TABLE_R - 16, PLATE_RAD = 13.5, CHAIR_R = TABLE_R + 22;
+  const ITEM_EDGE = TABLE_R - 6;         // предметы держим на столешнице
+  const FLOOR_R = 520;                    // столы не уходят за пол
+  const TABLE_GAP = TABLE_R * 2 + 110;    // шаг сетки столов
 
   // --- сцена ---
   const stage = document.getElementById('stage');
@@ -79,290 +78,281 @@
   stage.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(40, 1, .1, 4000);
+  const camera = new THREE.PerspectiveCamera(42, 1, .1, 8000);
   scene.add(new THREE.HemisphereLight(0xFFFFFF, 0xD8D4CC, .62));
-  const key = new THREE.DirectionalLight(0xFFF7EE, 1.05); key.position.set(120,220,140); scene.add(key);
-  const rim = new THREE.DirectionalLight(0xDCE6F2, .32); rim.position.set(-140,90,-120); scene.add(rim);
+  const keyLight = new THREE.DirectionalLight(0xFFF7EE, 1.05); keyLight.position.set(220,360,180); scene.add(keyLight);
+  const rimLight = new THREE.DirectionalLight(0xDCE6F2, .3); rimLight.position.set(-200,120,-160); scene.add(rimLight);
 
-  // пол
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(600, 48),
-    new THREE.MeshStandardMaterial({color:0xEDEBE5, roughness:.95}));
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(1400, 56),
+    new THREE.MeshStandardMaterial({color:0xEDEBE5, roughness:.96}));
   floor.rotation.x = -Math.PI/2; scene.add(floor);
 
-  // мягкая тень под столом
-  (function(){
-    const c = document.createElement('canvas'); c.width = c.height = 128;
-    const g = c.getContext('2d').createRadialGradient(64,64,6,64,64,62);
-    g.addColorStop(0,'rgba(70,62,54,.32)'); g.addColorStop(1,'rgba(0,0,0,0)');
-    const cx = c.getContext('2d'); cx.fillStyle = g; cx.fillRect(0,0,128,128);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(TABLE_R*2.6, TABLE_R*2.6),
-      new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c), transparent:true, depthWrite:false}));
-    m.rotation.x = -Math.PI/2; m.position.y = 0.4; scene.add(m);
-  })();
+  // кольцо выделения активного стола
+  const selRing = new THREE.Mesh(new THREE.TorusGeometry(TABLE_R + 12, 1.6, 8, 64),
+    new THREE.MeshStandardMaterial({color:0x9CB08A, roughness:.6, emissive:0x2c3a22}));
+  selRing.rotation.x = -Math.PI/2; selRing.position.y = 0.6; selRing.visible = false; scene.add(selRing);
 
-  // стол: столешница + ножка + основание (несущая часть под скатертью)
-  (function(){
-    const wood = new THREE.MeshStandardMaterial({color:0xC9B79A, roughness:.7});
-    const top = new THREE.Mesh(new THREE.CylinderGeometry(TABLE_R, TABLE_R, 4, 48), wood);
-    top.position.y = TABLE_H - 2; scene.add(top);
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(9, 11, TABLE_H-4, 24), wood);
-    stem.position.y = (TABLE_H-4)/2; scene.add(stem);
-    const foot = new THREE.Mesh(new THREE.CylinderGeometry(34, 36, 3, 32), wood);
-    foot.position.y = 1.5; scene.add(foot);
-  })();
-
-  // скатерть: покрывает столешницу и спадает юбкой почти до пола
-  (function(){
-    const cloth = new THREE.MeshStandardMaterial({color:0xF3EEE6, roughness:.9, side:THREE.DoubleSide});
-    const topDisk = new THREE.Mesh(new THREE.CircleGeometry(TABLE_R + 1.5, 48), cloth);
-    topDisk.rotation.x = -Math.PI/2; topDisk.position.y = TABLE_H + 0.3; scene.add(topDisk);
-    const skirt = new THREE.Mesh(new THREE.CylinderGeometry(TABLE_R + 1.5, TABLE_R + 3, TABLE_H - 4, 48, 1, true), cloth);
-    skirt.position.y = (TABLE_H)/2 + 1; scene.add(skirt);
-  })();
-
-  // сервировка (стулья + тарелки + приборы) — своя группа, пересобирается при смене числа гостей
-  const TABLE_TOP = TABLE_H + 0.6;
-  const PLATE_R = TABLE_R - 16, PLATE_RAD = 13.5, CHAIR_R = TABLE_R + 24;
-  const settingsGroup = new THREE.Group(); scene.add(settingsGroup);
-
-  // мягкая тень-пятно под букетом (заземляет композицию на скатерти)
-  const blobMat = (function(){
-    const c = document.createElement('canvas'); c.width = c.height = 128;
-    const g = c.getContext('2d').createRadialGradient(64,64,4,64,64,62);
-    g.addColorStop(0,'rgba(70,62,54,.28)'); g.addColorStop(1,'rgba(0,0,0,0)');
-    const cx = c.getContext('2d'); cx.fillStyle = g; cx.fillRect(0,0,128,128);
-    return new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c), transparent:true, depthWrite:false});
-  })();
-  const blobGeo = new THREE.PlaneGeometry(1, 1);
-
-  const plateMat = new THREE.MeshStandardMaterial({color:0xFAFAF7, roughness:.35, metalness:0});
+  // --- общие геометрии/материалы ---
+  const woodMat  = new THREE.MeshStandardMaterial({color:0xC9B79A, roughness:.7});
+  const clothMat = new THREE.MeshStandardMaterial({color:0xF3EEE6, roughness:.92, side:THREE.DoubleSide});
+  const plateMat = new THREE.MeshStandardMaterial({color:0xFAFAF7, roughness:.32});
   const metalMat = new THREE.MeshStandardMaterial({color:0xC7CBD0, roughness:.4, metalness:.5});
+  const napkinMat= new THREE.MeshStandardMaterial({color:0xE7C9C0, roughness:.9});
   const chairMat = new THREE.MeshStandardMaterial({color:0x8A6E52, roughness:.6});
-  const plateGeo = new THREE.CylinderGeometry(PLATE_RAD, PLATE_RAD - 1.5, 1.4, 28);
-  const cutGeo   = new THREE.BoxGeometry(1.4, 0.5, 17);
-  const seatGeo  = new THREE.BoxGeometry(42, 4, 42);
-  const backGeo  = new THREE.BoxGeometry(42, 42, 4);
-  const legGeo   = new THREE.BoxGeometry(4, 45, 4);
+  const topGeo=new THREE.CylinderGeometry(TABLE_R,TABLE_R,4,48);
+  const stemGeo=new THREE.CylinderGeometry(9,11,TABLE_H-4,24);
+  const footGeo=new THREE.CylinderGeometry(34,36,3,32);
+  const clothTopGeo=new THREE.CircleGeometry(TABLE_R+1.5,48);
+  const skirtGeo=new THREE.CylinderGeometry(TABLE_R+1.5,TABLE_R+3,TABLE_H-4,48,1,true);
+  const plateGeo=new THREE.CylinderGeometry(PLATE_RAD,PLATE_RAD-1.5,1.4,28);
+  const cutGeo=new THREE.BoxGeometry(1.4,0.5,17);
+  const napkinGeo=new THREE.BoxGeometry(15,1.2,20);
+  const seatGeo=new THREE.BoxGeometry(42,4,42), backGeo=new THREE.BoxGeometry(42,42,4), legGeo=new THREE.BoxGeometry(4,45,4);
+  const blobGeo=new THREE.PlaneGeometry(1,1);
+  const blobMat=(function(){
+    const c=document.createElement('canvas');c.width=c.height=128;
+    const g=c.getContext('2d').createRadialGradient(64,64,4,64,64,62);
+    g.addColorStop(0,'rgba(70,62,54,.28)');g.addColorStop(1,'rgba(0,0,0,0)');
+    const cx=c.getContext('2d');cx.fillStyle=g;cx.fillRect(0,0,128,128);
+    return new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false});
+  })();
 
-  function chair(){
-    const g = new THREE.Group();
-    const seat = new THREE.Mesh(seatGeo, chairMat); seat.position.y = 45; g.add(seat);
-    const back = new THREE.Mesh(backGeo, chairMat); back.position.set(0, 66, 20); g.add(back);
-    for (const sx of [-18, 18]) for (const sz of [-18, 18]){
-      const leg = new THREE.Mesh(legGeo, chairMat); leg.position.set(sx, 22.5, sz); g.add(leg);
-    }
+  function chairMesh(){
+    const g=new THREE.Group();
+    const seat=new THREE.Mesh(seatGeo,chairMat); seat.position.y=45; g.add(seat);
+    const back=new THREE.Mesh(backGeo,chairMat); back.position.set(0,66,20); g.add(back);
+    for(const sx of [-18,18]) for(const sz of [-18,18]){ const l=new THREE.Mesh(legGeo,chairMat); l.position.set(sx,22.5,sz); g.add(l); }
     return g;
   }
-  function placeSetting(){
-    const g = new THREE.Group();
-    const plate = new THREE.Mesh(plateGeo, plateMat); plate.position.y = TABLE_TOP; g.add(plate);
-    const fork = new THREE.Mesh(cutGeo, metalMat); fork.position.set(-PLATE_RAD - 5, TABLE_TOP, 0); g.add(fork);
-    const knife = new THREE.Mesh(cutGeo, metalMat); knife.position.set(PLATE_RAD + 5, TABLE_TOP, 0); g.add(knife);
+  function settingMesh(){   // тарелка + салфетка + вилка + нож (двигается целиком)
+    const g=new THREE.Group();
+    g.add(new THREE.Mesh(plateGeo,plateMat));
+    const nap=new THREE.Mesh(napkinGeo,napkinMat); nap.position.set(-PLATE_RAD-11,-0.2,0); g.add(nap);
+    const fork=new THREE.Mesh(cutGeo,metalMat); fork.position.set(-PLATE_RAD-10,0.6,0); g.add(fork);
+    const knife=new THREE.Mesh(cutGeo,metalMat); knife.position.set(PLATE_RAD+5,0.4,0); g.add(knife);
     return g;
-  }
-
-  // Пересобрать сервировку под N гостей.
-  function buildTableSet(){
-    while (settingsGroup.children.length) settingsGroup.remove(settingsGroup.children[0]);
-    for (let i = 0; i < guests; i++){
-      const a = i / guests * Math.PI * 2 - Math.PI/2;
-      const cs = Math.cos(a), sn = Math.sin(a);
-      // тарелка + приборы (развёрнуты «лицом» к центру)
-      const set = placeSetting();
-      set.position.set(cs * PLATE_R, 0, sn * PLATE_R);
-      set.rotation.y = -a + Math.PI/2;
-      settingsGroup.add(set);
-      // стул (спинкой наружу)
-      const ch = chair();
-      ch.position.set(cs * CHAIR_R, 0, sn * CHAIR_R);
-      ch.rotation.y = -a - Math.PI/2;
-      settingsGroup.add(ch);
-    }
   }
 
   // --- камера ---
-  let FOCUS = new THREE.Vector3(0, TABLE_H + 10, 0), FIT = 300;
+  let FOCUS = new THREE.Vector3(0, TABLE_H, 0), FIT = 400;
   const cam = window.createCameraControls(camera, renderer.domElement, {
     onInteract: () => document.getElementById('hint').classList.add('gone'),
-    onReset: () => cam.frame(FOCUS, FIT, false),
+    onReset: () => frameAll(),
   });
-  function frameScene(){
-    const R = Math.max(Math.hypot(TABLE_R, 55), 60);
+  function frameAll(){
+    let cx=0, cz=0; tables.forEach(t=>{ cx+=t.position.x; cz+=t.position.z; });
+    if (tables.length){ cx/=tables.length; cz/=tables.length; }
+    let spread = TABLE_R;
+    tables.forEach(t=> spread = Math.max(spread, Math.hypot(t.position.x-cx, t.position.z-cz)+TABLE_R));
+    FOCUS.set(cx, TABLE_H, cz);
+    const R = Math.max(Math.hypot(spread, 60), 80);
     const fov = camera.fov*Math.PI/180;
     const vFit = R/Math.sin(fov/2);
     const hFit = R/Math.sin(2*Math.atan(Math.tan(fov/2)*Math.max(camera.aspect,0.4))/2);
-    FIT = Math.max(vFit, hFit)*1.15;
+    FIT = Math.max(vFit, hFit)*1.12;
     cam.frame(FOCUS, FIT, false);
   }
 
-  // --- букеты на столе ---
-  const bouquets = [];             // массив root-групп; у каждой userData.spec — свой букет
-  let currentSpec = DEFAULT;       // какой букет копируем кнопкой «+ Копия»
+  // --- столы ---
+  const tables = [];
+  let selected = null;
+  let currentSpec = DEFAULT;
 
-  // Поставить букет по спецификации spec в точку (x,z). spec.manual — {key:[x,y,z]}.
-  function placeBouquet(spec, x, z){
-    const res = window.BouquetBuilder.build(spec.cart, spec.vaseId, spec.variantSeed, { manual: manualVec(spec.manual) });
-    if (!res.flowerGroups.length && !res.vase){ return null; }
-    const root = res.root;
-    root.position.set(x, TABLE_H, z);
-    root.userData.spec = spec;              // храним спецификацию для сохранения
-    root.userData.footprint = Math.max(res.focus.radius, 8);   // радиус пятна букета (для проверок)
-    // мягкая тень под букетом на скатерти
-    const shadow = new THREE.Mesh(blobGeo, blobMat);
-    shadow.rotation.x = -Math.PI/2; shadow.position.y = 0.35;
-    const fp = root.userData.footprint; shadow.scale.set(fp*2.6, fp*2.6, 1);
-    root.add(shadow);
-    root.userData.grow = 0;                 // мягкое появление
-    root.scale.setScalar(0.001);
-    scene.add(root); bouquets.push(root);
-    currentSpec = spec;
-    updateReadout();
-    return root;
+  function buildSettings(t, saved){
+    const sg = t.userData.settings; const seats = t.userData.seats;
+    while (sg.children.length) sg.remove(sg.children[0]);
+    const use = (saved && saved.length === seats) ? saved : null;
+    for (let i=0;i<seats;i++){
+      const a = i/seats*Math.PI*2 - Math.PI/2, cs=Math.cos(a), sn=Math.sin(a);
+      const ch = chairMesh(); ch.position.set(cs*CHAIR_R,0,sn*CHAIR_R); ch.rotation.y=-a-Math.PI/2; sg.add(ch);
+      const s = settingMesh();
+      if (use){ s.position.set(use[i].x, TABLE_TOP, use[i].z); s.rotation.y = use[i].rot; }
+      else { s.position.set(cs*PLATE_R, TABLE_TOP, sn*PLATE_R); s.rotation.y = -a + Math.PI/2; }
+      s.userData = { kind:'setting', table:t };
+      sg.add(s);
+    }
   }
 
-  // разложить очередную копию по кольцу на столе (свободное место)
-  function nextSpot(){
-    const n = bouquets.length;
-    if (n === 0) return [0, 0];
-    const ring = EDGE * 0.62;
-    const a = (n-1) * (Math.PI*2 / 6) + 0.4;
+  function addBouquet(t, spec, lx, lz){
+    const res = window.BouquetBuilder.build(spec.cart, spec.vaseId, spec.variantSeed, { manual: manualVec(spec.manual) });
+    if (!res.flowerGroups.length && !res.vase) return null;
+    const root = res.root;
+    root.position.set(lx, TABLE_H, lz);
+    root.userData = { kind:'bouquet', table:t, spec, footprint: Math.max(res.focus.radius, 8), grow:0 };
+    const fp = root.userData.footprint;
+    const sh = new THREE.Mesh(blobGeo, blobMat); sh.rotation.x=-Math.PI/2; sh.position.y=0.35; sh.scale.set(fp*2.6,fp*2.6,1); root.add(sh);
+    root.scale.setScalar(0.001);
+    t.userData.bouquets.add(root);
+    currentSpec = spec;
+    return root;
+  }
+  function nextBouquetSpot(t){
+    const n = t.userData.bouquets.children.length;
+    if (n === 0) return [0,0];
+    const ring = ITEM_EDGE*0.5, a = (n-1)*(Math.PI*2/6)+0.4;
     return [Math.cos(a)*ring, Math.sin(a)*ring];
   }
 
-  function updateReadout(){
-    document.getElementById('count').textContent = bouquets.length;
-    document.getElementById('guests').textContent = guests;
-    document.getElementById('empty').style.display = bouquets.length ? 'none' : 'grid';
+  function createTable(data){
+    const t = new THREE.Group();
+    t.position.set(data.x||0, 0, data.z||0);
+    t.userData = { kind:'table', seats: data.seats||6 };
+    const top=new THREE.Mesh(topGeo,woodMat); top.position.y=TABLE_H-2; t.add(top);
+    const stem=new THREE.Mesh(stemGeo,woodMat); stem.position.y=(TABLE_H-4)/2; t.add(stem);
+    const foot=new THREE.Mesh(footGeo,woodMat); foot.position.y=1.5; t.add(foot);
+    const clothTop=new THREE.Mesh(clothTopGeo,clothMat); clothTop.rotation.x=-Math.PI/2; clothTop.position.y=TABLE_H+0.3; clothTop.userData={kind:'table',table:t}; t.add(clothTop);
+    const skirt=new THREE.Mesh(skirtGeo,clothMat); skirt.position.y=TABLE_H/2+1; skirt.userData={kind:'table',table:t}; t.add(skirt);
+    t.userData.handles=[clothTop,skirt];
+    t.userData.settings=new THREE.Group(); t.add(t.userData.settings);
+    t.userData.bouquets=new THREE.Group(); t.add(t.userData.bouquets);
+    scene.add(t); tables.push(t);
+    buildSettings(t, data.settings);
+    (data.bouquets||[]).forEach(b=> addBouquet(t, b.spec, b.x||0, b.z||0));
+    return t;
   }
 
-  // Сохранить всю расстановку стола (спеки + позиции + гостей), чтобы не терялась.
-  function saveHall(){
-    const items = bouquets.map(b => ({ spec: b.userData.spec, x: +b.position.x.toFixed(2), z: +b.position.z.toFixed(2) }));
-    try { localStorage.setItem(HALL_KEY, JSON.stringify({ bouquets: items, seats: guests })); } catch(_){}
+  function tableData(t){
+    return {
+      x:+t.position.x.toFixed(1), z:+t.position.z.toFixed(1), seats:t.userData.seats,
+      bouquets: t.userData.bouquets.children.map(b=>({ spec:b.userData.spec, x:+b.position.x.toFixed(1), z:+b.position.z.toFixed(1) })),
+      settings: t.userData.settings.children.filter(c=>c.userData.kind==='setting')
+                 .map(s=>({ x:+s.position.x.toFixed(1), z:+s.position.z.toFixed(1), rot:+s.rotation.y.toFixed(3) })),
+    };
+  }
+  function freeSpot(){
+    const n = tables.length, cols = Math.max(1, Math.ceil(Math.sqrt(n+1)));
+    const col = n % cols, row = Math.floor(n / cols);
+    return [ (col - (cols-1)/2) * TABLE_GAP, (row - (cols-1)/2) * TABLE_GAP ];
   }
 
-  // Проверки «влезает/тесно»: считаем по реальным см и показываем предупреждения.
-  function computeWarnings(){
-    const w = [];
-    // стулья вокруг стола
-    const chairCirc = 2 * Math.PI * CHAIR_R;
-    if (guests * 54 > chairCirc)
-      w.push(['Стульям тесно', `${guests} гостей не рассадить вокруг стола ⌀${TABLE_R*2} см — нужен стол больше или меньше гостей.`]);
-    // тарелки по краю
-    const plateArc = 2 * Math.PI * PLATE_R / guests;
-    if (plateArc < PLATE_RAD * 2 + 5)
-      w.push(['Тарелки не помещаются', `На ${guests} персон не хватает места по краю стола.`]);
-    // букеты заходят на тарелки
-    const plates = [];
-    for (let i = 0; i < guests; i++){ const a = i/guests*Math.PI*2 - Math.PI/2; plates.push([Math.cos(a)*PLATE_R, Math.sin(a)*PLATE_R]); }
-    let hitPlate = false;
-    bouquets.forEach(b => {
-      const fp = b.userData.footprint || 12;
-      plates.forEach(p => { if (Math.hypot(b.position.x - p[0], b.position.z - p[1]) < fp + PLATE_RAD) hitPlate = true; });
+  function selectTable(t){
+    selected = t;
+    if (t){ selRing.visible = true; selRing.position.set(t.position.x, 0.6, t.position.z); document.getElementById('guests').textContent = t.userData.seats; }
+    else selRing.visible = false;
+  }
+
+  // --- перетаскивание: что схватил, то и двигаем ---
+  function pickables(){
+    const list = [];
+    tables.forEach(t => {
+      t.userData.handles.forEach(h => list.push(h));
+      t.userData.bouquets.children.forEach(b => list.push(b));
+      t.userData.settings.children.forEach(c => { if (c.userData.kind==='setting') list.push(c); });
     });
-    if (hitPlate) w.push(['Букет заходит на тарелки', 'Не влезает между приборами — сдвиньте ближе к центру или возьмите вазу уже.']);
-    // букеты вплотную
-    let tight = false;
-    for (let i = 0; i < bouquets.length; i++) for (let j = i+1; j < bouquets.length; j++){
-      const a = bouquets[i], b = bouquets[j];
-      if (Math.hypot(a.position.x - b.position.x, a.position.z - b.position.z) < (a.userData.footprint||12) + (b.userData.footprint||12)) tight = true;
+    return list;
+  }
+  const _wp = new THREE.Vector3();
+  function onMove(obj, p){
+    const t = obj.userData.table;
+    if (obj.userData.kind === 'table'){
+      let x=p.x, z=p.z; const r=Math.hypot(x,z); if (r>FLOOR_R){ x*=FLOOR_R/r; z*=FLOOR_R/r; }
+      t.position.x=x; t.position.z=z; selRing.position.set(x,0.6,z);
+    } else {
+      let lx=p.x - t.position.x, lz=p.z - t.position.z; const r=Math.hypot(lx,lz);
+      if (r>ITEM_EDGE){ lx*=ITEM_EDGE/r; lz*=ITEM_EDGE/r; }
+      obj.position.x=lx; obj.position.z=lz;
     }
+    renderWarnings();
+  }
+  const drag = window.createFlowerDrag(camera, renderer.domElement, {
+    getPickables: pickables,
+    planeMode: 'horizontal',
+    getAnchor: (o) => o.userData.kind==='table' ? o.userData.table.position : o.getWorldPosition(_wp),
+    canGrab: () => true,
+    setCameraPaused: (v) => cam.setPaused(v),
+    moveTo: onMove,
+    onGrab: (o) => { selectTable(o.userData.table); document.getElementById('hint').classList.add('gone'); },
+    onRelease: () => { updateReadout(); saveHall(); renderWarnings(); },
+  });
+
+  // --- проверки «влезает/тесно» для выбранного стола ---
+  function computeWarnings(t){
+    if (!t) return [];
+    const w=[], seats=t.userData.seats;
+    if (seats*54 > 2*Math.PI*CHAIR_R) w.push(['Стульям тесно', `${seats} гостей не рассадить вокруг стола ⌀${TABLE_R*2} см.`]);
+    const bqs = t.userData.bouquets.children;
+    const sets = t.userData.settings.children.filter(c=>c.userData.kind==='setting');
+    let hit=false;
+    bqs.forEach(b=>{ const fp=b.userData.footprint||12; sets.forEach(s=>{ if(Math.hypot(b.position.x-s.position.x,b.position.z-s.position.z)<fp+PLATE_RAD) hit=true; }); });
+    if (hit) w.push(['Букет заходит на тарелки', 'Не влезает между приборами — сдвиньте к центру или возьмите вазу уже.']);
+    let tight=false;
+    for(let i=0;i<bqs.length;i++)for(let j=i+1;j<bqs.length;j++){ const a=bqs[i],b=bqs[j]; if(Math.hypot(a.position.x-b.position.x,a.position.z-b.position.z)<(a.userData.footprint||12)+(b.userData.footprint||12)) tight=true; }
     if (tight) w.push(['Букеты вплотную', 'Композиции перекрываются — расставьте свободнее.']);
     return w;
   }
   function renderWarnings(){
-    const w = computeWarnings();
-    document.getElementById('warnings').innerHTML =
-      w.map(x => `<div class="warn"><strong>${x[0]}.</strong> ${x[1]}</div>`).join('');
+    const w = computeWarnings(selected);
+    document.getElementById('warnings').innerHTML = w.map(x=>`<div class="warn"><strong>${x[0]}.</strong> ${x[1]}</div>`).join('');
   }
 
-  // держим букет на столешнице: не даём уехать за край
-  function moveBouquet(g, p){
-    let x = p.x, z = p.z; const r = Math.hypot(x, z);
-    if (r > EDGE){ x *= EDGE/r; z *= EDGE/r; }
-    g.position.set(x, TABLE_H, z);
-    renderWarnings();                       // живые проверки при перетаскивании
+  function totalBouquets(){ return tables.reduce((s,t)=>s+t.userData.bouquets.children.length,0); }
+  function updateReadout(){
+    document.getElementById('tcount').textContent = tables.length;
+    document.getElementById('count').textContent = totalBouquets();
+    document.getElementById('guests').textContent = selected ? selected.userData.seats : 0;
+    document.getElementById('empty').style.display = tables.length ? 'none' : 'grid';
   }
-
-  // --- перетаскивание букетов по столу (тот же движок, горизонтальная плоскость) ---
-  const drag = window.createFlowerDrag(camera, renderer.domElement, {
-    getPickables: () => bouquets,
-    planeMode: 'horizontal',
-    getAnchor: (g) => g.position,
-    canGrab: () => true,
-    setCameraPaused: (v) => cam.setPaused(v),
-    moveTo: moveBouquet,
-    onGrab: (g) => { g.userData.lift = true; document.getElementById('hint').classList.add('gone'); },
-    onRelease: (g) => { g.userData.lift = false; saveHall(); },   // сохраняем новую позицию
-  });
-
-  function setGuests(n){
-    guests = Math.max(2, Math.min(14, n));
-    buildTableSet(); updateReadout(); renderWarnings(); saveHall();
+  function saveHall(){
+    try { localStorage.setItem(HALL_KEY, JSON.stringify({ tables: tables.map(tableData) })); } catch(_){}
   }
 
   // --- кнопки ---
+  function afterChange(frame){ updateReadout(); renderWarnings(); saveHall(); if(frame) frameAll(); }
+
+  document.getElementById('add-table').addEventListener('click', () => {
+    const [x,z]=freeSpot(); const t=createTable({x,z,seats:6,bouquets:[{spec:currentSpec,x:0,z:0}]});
+    selectTable(t); afterChange(true);
+  });
+  document.getElementById('copy-table').addEventListener('click', () => {
+    if(!selected) return; const d=tableData(selected); const [x,z]=freeSpot();
+    const t=createTable(Object.assign({}, d, {x,z})); selectTable(t); afterChange(true);
+  });
+  document.getElementById('del-table').addEventListener('click', () => {
+    if(!selected || tables.length<=1) return;
+    scene.remove(selected); tables.splice(tables.indexOf(selected),1);
+    selectTable(tables[0]); afterChange(true);
+  });
   document.getElementById('add').addEventListener('click', () => {
-    const [x,z] = nextSpot(); placeBouquet(currentSpec, x, z); saveHall(); renderWarnings();
+    if(!selected) return; const [x,z]=nextBouquetSpot(selected); addBouquet(selected, currentSpec, x, z); afterChange(false);
   });
   document.getElementById('remove').addEventListener('click', () => {
-    const g = bouquets.pop(); if (g) scene.remove(g); updateReadout(); saveHall(); renderWarnings();
+    if(!selected) return; const bg=selected.userData.bouquets; if(bg.children.length) bg.remove(bg.children[bg.children.length-1]); afterChange(false);
   });
-  document.getElementById('clear').addEventListener('click', () => {
-    while (bouquets.length){ scene.remove(bouquets.pop()); }
-    updateReadout(); saveHall(); renderWarnings();
-  });
-  document.getElementById('g-minus').addEventListener('click', () => setGuests(guests - 1));
-  document.getElementById('g-plus').addEventListener('click', () => setGuests(guests + 1));
-  document.getElementById('reset').addEventListener('click', () => cam.frame(FOCUS, FIT, false));
+  document.getElementById('g-minus').addEventListener('click', () => { if(selected){ selected.userData.seats=Math.max(2,selected.userData.seats-1); buildSettings(selected); afterChange(false);} });
+  document.getElementById('g-plus').addEventListener('click',  () => { if(selected){ selected.userData.seats=Math.min(14,selected.userData.seats+1); buildSettings(selected); afterChange(false);} });
+  document.getElementById('reset').addEventListener('click', () => frameAll());
 
-  function resize(){
-    const w = stage.clientWidth, h = stage.clientHeight;
-    renderer.setSize(w, h); camera.aspect = w/h; camera.updateProjectionMatrix();
-  }
+  function resize(){ const w=stage.clientWidth,h=stage.clientHeight; renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); }
   addEventListener('resize', resize);
 
   function tick(){
     requestAnimationFrame(tick);
-    bouquets.forEach(g => {
-      if (g.userData.grow < 1){ g.userData.grow = Math.min(1, g.userData.grow + .06); g.scale.setScalar(1 - Math.pow(1 - g.userData.grow, 3)); }
-      const targetLift = g.userData.lift ? 6 : 0;   // приподнимаем схваченный букет
-      g.position.y += (TABLE_H + targetLift - g.position.y) * 0.25;
-    });
+    tables.forEach(t => t.userData.bouquets.children.forEach(b => {
+      if (b.userData.grow < 1){ b.userData.grow=Math.min(1,b.userData.grow+.06); b.scale.setScalar(1-Math.pow(1-b.userData.grow,3)); }
+    }));
     cam.updateInertia();
     renderer.render(scene, camera);
   }
 
-  // --- старт: восстановить стол, добавить присланный из конструктора букет ---
-  resize(); frameScene();
+  // --- старт: восстановить столы (+ миграция старых форматов), добавить присланный букет ---
+  resize();
+  const saved = readJSON(HALL_KEY);
+  let list = null;
+  if (Array.isArray(saved)) list = [{ seats:6, bouquets:saved }];                 // очень старый формат
+  else if (saved && Array.isArray(saved.tables)) list = saved.tables;             // новый формат
+  else if (saved && Array.isArray(saved.bouquets)) list = [{ seats:saved.seats||6, bouquets:saved.bouquets }]; // одностоловый
+  if (list) list.forEach(d => createTable(d));
+  if (!tables.length) createTable({ x:0, z:0, seats:6, bouquets:[] });
+  selectTable(tables[0]);
 
-  // 1) восстанавливаем сохранённую расстановку (новая схема {bouquets,seats}; старая — массив)
-  const savedHall = readJSON(HALL_KEY);
-  let savedItems = null;
-  if (Array.isArray(savedHall)) savedItems = savedHall;                 // старый формат
-  else if (savedHall && Array.isArray(savedHall.bouquets)){ savedItems = savedHall.bouquets; if (savedHall.seats) guests = savedHall.seats; }
-  if (savedItems) savedItems.forEach(it => { if (it && it.spec) placeBouquet(it.spec, it.x || 0, it.z || 0); });
-
-  buildTableSet();                 // накрываем стол под число гостей
-
-  // 2) если из конструктора прислали букет «на стол» — добавляем его и чистим «входящее»
   const pending = readJSON(PENDING_KEY);
-  if (pending && pending.cart){
-    const [x,z] = nextSpot(); placeBouquet(pending, x, z);
-    localStorage.removeItem(PENDING_KEY);
-  }
+  if (pending && pending.cart){ const [x,z]=nextBouquetSpot(selected); addBouquet(selected, pending, x, z); localStorage.removeItem(PENDING_KEY); }
+  if (!totalBouquets()) addBouquet(selected, DEFAULT, 0, 0);
 
-  // 3) совсем пусто (первый визит) — ставим запасной букет по центру
-  if (!bouquets.length) placeBouquet(DEFAULT, 0, 0);
+  updateReadout(); renderWarnings(); saveHall(); frameAll(); tick();
+  const loader=document.getElementById('loader'); if(loader){ loader.classList.add('gone'); setTimeout(()=>loader.remove(),450); }
 
-  updateReadout(); renderWarnings(); saveHall();
-  tick();
-  const loader = document.getElementById('loader');   // стол накрыт — убираем загрузку
-  if (loader){ loader.classList.add('gone'); setTimeout(() => loader.remove(), 450); }
-
-  // отладочный хук
-  window.hallDebug = { scene, camera, cam, bouquets, settingsGroup, placeBouquet, moveBouquet, saveHall,
-    buildTableSet, computeWarnings, setGuests: (n)=>setGuests(n), drag, TABLE_R, TABLE_H, EDGE, get guests(){return guests;} };
+  window.hallDebug = { scene, camera, cam, tables, get selected(){return selected;}, createTable, addBouquet, computeWarnings, drag, TABLE_R, TABLE_H, pickables };
 })();
 </script>
 </body>
