@@ -36,9 +36,15 @@
   </div>
   <button id="reset">Показать все</button>
   <button id="walk-btn" class="walk">◆ Пройтись по залу</button>
+  <button id="share-btn">🔗 Поделиться с клиентом</button>
 </div>
 <input id="venue-file" type="file" accept=".glb,.gltf" style="display:none">
 <div id="venue-msg"></div>
+
+<div id="viewbanner">
+  <span>Вы смотрите зал, собранный флористом.</span>
+  <a href="constructor.html">Собрать свой →</a>
+</div>
 
 <div id="walkbar">
   <span class="wtitle">Вид гостя</span>
@@ -301,6 +307,9 @@
   let selected = null;
   let currentSpec = DEFAULT;
   let mode = 'edit';                    // 'edit' — редактор, 'walk' — прогулка гостя
+  let viewOnly = false;                 // открыто по ссылке клиентом — без редактирования
+  const encHall = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+  const decHall = s => JSON.parse(decodeURIComponent(escape(atob(s))));
 
   function buildSettings(t, saved){
     const sg = t.userData.settings; const seats = t.userData.seats;
@@ -411,7 +420,7 @@
     getPickables: pickables,
     planeMode: 'horizontal',
     getAnchor: (o) => o.userData.kind==='table' ? o.userData.table.position : o.getWorldPosition(_wp),
-    canGrab: () => mode==='edit',
+    canGrab: () => mode==='edit' && !viewOnly,
     setCameraPaused: (v) => cam.setPaused(v),
     moveTo: onMove,
     onGrab: (o) => { selectTable(o.userData.table); document.getElementById('hint').classList.add('gone'); },
@@ -531,6 +540,15 @@
   document.getElementById('load-venue').addEventListener('click', ()=> document.getElementById('venue-file').click());
   document.getElementById('venue-file').addEventListener('change', (e)=>{ const f=e.target.files[0]; if(f) loadVenueFile(f); e.target.value=''; });
   document.getElementById('clear-venue').addEventListener('click', ()=>{ if(venueModel){ scene.remove(venueModel); venueModel=null; } floor.visible=true; document.getElementById('clear-venue').style.display='none'; showMsg('Стандартный пол возвращён'); });
+
+  // --- поделиться с клиентом: ссылка со всей расстановкой ---
+  document.getElementById('share-btn').addEventListener('click', ()=>{
+    const url = location.origin + location.pathname + '#v=' + encHall({ tables: tables.map(tableData) });
+    if (url.length > 60000){ showMsg('Слишком большой зал для ссылки — уберите часть столов', true); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText)
+      navigator.clipboard.writeText(url).then(()=>showMsg('Ссылка скопирована — отправьте клиенту ✓'), ()=>prompt('Ссылка для клиента:', url));
+    else prompt('Ссылка для клиента:', url);
+  });
   document.getElementById('panel-head').addEventListener('click', () => {
     const p=document.getElementById('panel'); p.classList.toggle('collapsed');
     p.querySelector('.chev').textContent = p.classList.contains('collapsed') ? '▸' : '▾';
@@ -631,22 +649,32 @@
     renderer.render(scene, camera);
   }
 
-  // --- старт: восстановить столы (+ миграция старых форматов), добавить присланный букет ---
+  // --- старт: ссылка-просмотр (#v=...) имеет приоритет, иначе — своя расстановка ---
   resize();
-  const saved = readJSON(HALL_KEY);
+  let shared = null;
+  if (location.hash.indexOf('#v=') === 0){ try { shared = decHall(location.hash.slice(3)); } catch(_){} }
+
   let list = null;
-  if (Array.isArray(saved)) list = [{ seats:SEATS_DEFAULT, bouquets:saved }];                 // очень старый формат
-  else if (saved && Array.isArray(saved.tables)) list = saved.tables;             // новый формат
-  else if (saved && Array.isArray(saved.bouquets)) list = [{ seats:saved.seats||SEATS_DEFAULT, bouquets:saved.bouquets }]; // одностоловый
+  if (shared && Array.isArray(shared.tables)){
+    viewOnly = true; document.body.classList.add('view-only');   // режим клиента: только смотреть
+    list = shared.tables;
+  } else {
+    const saved = readJSON(HALL_KEY);
+    if (Array.isArray(saved)) list = [{ seats:SEATS_DEFAULT, bouquets:saved }];
+    else if (saved && Array.isArray(saved.tables)) list = saved.tables;
+    else if (saved && Array.isArray(saved.bouquets)) list = [{ seats:saved.seats||SEATS_DEFAULT, bouquets:saved.bouquets }];
+  }
   if (list) list.forEach(d => createTable(d));
   if (!tables.length) createTable({ x:0, z:0, seats:SEATS_DEFAULT, bouquets:[] });
   selectTable(tables[0]);
 
-  const pending = readJSON(PENDING_KEY);
-  if (pending && pending.cart){ const [x,z]=nextBouquetSpot(selected); addBouquet(selected, pending, x, z); localStorage.removeItem(PENDING_KEY); }
-  if (!totalBouquets()) addBouquet(selected, DEFAULT, 0, 0);
+  if (!viewOnly){
+    const pending = readJSON(PENDING_KEY);
+    if (pending && pending.cart){ const [x,z]=nextBouquetSpot(selected); addBouquet(selected, pending, x, z); localStorage.removeItem(PENDING_KEY); }
+    if (!totalBouquets()) addBouquet(selected, DEFAULT, 0, 0);
+  }
 
-  updateReadout(); renderWarnings(); saveHall(); frameAll(); tick();
+  updateReadout(); renderWarnings(); if(!viewOnly) saveHall(); frameAll(); tick();
   const loader=document.getElementById('loader'); if(loader){ loader.classList.add('gone'); setTimeout(()=>loader.remove(),450); }
 
   window.hallDebug = { scene, camera, cam, tables, get selected(){return selected;}, createTable, addBouquet, computeWarnings, drag, TABLE_R, TABLE_H, pickables,

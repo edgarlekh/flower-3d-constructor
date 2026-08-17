@@ -124,6 +124,25 @@ body.walk-mode #tools,body.walk-mode #panel,body.walk-mode #hint,body.walk-mode 
 }
 #venue-msg.show{opacity:1}
 
+/* кнопка «поделиться» */
+#tools > button#share-btn{
+  border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent-deep);
+  border-radius:14px;padding:10px 12px;font-size:13px;cursor:pointer;font-weight:600;box-shadow:var(--ui-shadow);
+}
+#tools > button#share-btn:hover{background:var(--accent);color:#fff}
+
+/* режим клиента (открыто по ссылке) */
+#viewbanner{
+  position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:4;display:none;
+  align-items:center;gap:14px;padding:9px 16px;color:var(--ui-text);
+  background:var(--ui);backdrop-filter:blur(12px);border:1px solid var(--ui-line);border-radius:14px;box-shadow:var(--ui-shadow);
+}
+#viewbanner span{font-size:13px;font-weight:600}
+#viewbanner a{font-size:13px;color:var(--accent);text-decoration:none;font-weight:600}
+#viewbanner a:hover{color:var(--accent-deep)}
+body.view-only #viewbanner{display:flex}
+body.view-only #topbar,body.view-only #panel,body.view-only #tools .tgroup,body.view-only #share-btn{display:none}
+
 /* левая панель: стол · размеры · внимание (сворачиваемая) */
 #panel{
   position:fixed;left:12px;top:74px;z-index:3;width:238px;color:var(--ui-text);
