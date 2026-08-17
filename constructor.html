@@ -32,6 +32,7 @@
       </div>
     </div>
     <div id="hint" class="label">Потяните цветок мышью — переставить · пустое место — поворот · колесо — зум</div>
+    <div id="loader" class="scene-loader"><div class="spin"></div>Собираем букет…</div>
   </section>
 
   <section id="recipe">
@@ -218,6 +219,8 @@
   // --- старт: тот самый пример ---
   state.cart.red = 3; state.cart.tul = 2; state.cart.eus = 3;
   ui.drawAll(); resize(); cam.place(); rebuild(); tick();
+  const loader = document.getElementById('loader');   // сцена готова — убираем загрузку
+  if (loader){ loader.classList.add('gone'); setTimeout(() => loader.remove(), 450); }
 
   // Отладочный хук: доступ к сцене для тестов и диагностики. В проде безвреден.
   window.constructorDebug = {

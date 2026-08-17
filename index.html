@@ -4,91 +4,151 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Цветочный конструктор — соберите свадебный декор и узнайте цену</title>
-  <meta name="description" content="Соберите свадебный цветочный букет в 3D, подвиньте каждый цветок руками и сразу увидьте цену. В реальных сантиметрах.">
+  <meta name="description" content="Соберите свадебный цветочный букет в 3D, подвиньте каждый цветок руками и сразу увидьте цену. Накройте стол и расставьте композиции — в реальных сантиметрах.">
   <link rel="stylesheet" href="assets/css/styles.css">
   <style>
-    .hero {
-      min-height: 100svh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      padding: 48px 20px;
-    }
+    body { background:
+      radial-gradient(60% 50% at 12% -5%, #fbeee3 0%, rgba(251,238,227,0) 60%),
+      radial-gradient(55% 45% at 100% 0%, #eef0e6 0%, rgba(238,240,230,0) 55%),
+      var(--bg); }
+
+    .nav { display:flex; align-items:center; justify-content:space-between; padding:22px 0; }
+    .brand { display:flex; align-items:center; gap:10px; font-weight:600; letter-spacing:-0.01em; }
+    .brand .mark { width:26px; height:26px; }
+    .nav a.plain { color:var(--muted); text-decoration:none; font-size:14px; }
+    .nav a.plain:hover { color:var(--accent); }
+
+    .hero { position:relative; text-align:center; padding:40px 0 20px; overflow:hidden; }
+    .leaf { position:absolute; color:var(--sage); opacity:.16; pointer-events:none; }
+    .leaf.l { left:-40px; top:40px; width:180px; transform:rotate(-8deg); }
+    .leaf.r { right:-46px; top:120px; width:200px; transform:scaleX(-1) rotate(-6deg); }
+
     .badge {
-      font-size: 14px;
-      color: var(--muted);
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      margin-bottom: 20px;
+      display:inline-block; font-size:12px; color:var(--sage); font-weight:700;
+      letter-spacing:0.16em; text-transform:uppercase;
+      padding:7px 14px; border:1px solid var(--line); border-radius:999px; background:var(--card);
     }
-    h1 {
-      font-size: clamp(30px, 7vw, 52px);
-      line-height: 1.1;
-      margin: 0 0 16px;
-      max-width: 14ch;
+    h1 { font-family:var(--serif); font-weight:500; font-size:clamp(34px, 7.5vw, 60px);
+         line-height:1.08; letter-spacing:-0.01em; margin:22px auto 16px; max-width:16ch; }
+    h1 em { font-style:italic; color:var(--accent); }
+    .lead { font-size:clamp(17px, 3.6vw, 21px); color:var(--muted); max-width:40ch; margin:0 auto 30px; }
+    .cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+    .note { margin-top:16px; font-size:13px; color:var(--muted); }
+    .note b { color:var(--ink); font-weight:600; }
+
+    .section { padding:56px 0; }
+    .section h2 { font-family:var(--serif); font-weight:500; font-size:clamp(24px,5vw,34px);
+                  text-align:center; margin:0 0 8px; }
+    .section .sub { text-align:center; color:var(--muted); margin:0 auto 36px; max-width:44ch; }
+
+    .steps { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+    .step { text-align:center; padding:8px; }
+    .step .n { width:40px; height:40px; margin:0 auto 14px; border-radius:50%;
+      display:grid; place-items:center; font-weight:700; color:var(--accent);
+      background:var(--bg-warm); border:1px solid var(--line); }
+    .step b { display:block; margin-bottom:6px; }
+    .step span { color:var(--muted); font-size:15px; }
+
+    .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+            padding:24px 22px; box-shadow:var(--shadow); transition:transform .15s ease, box-shadow .15s ease; }
+    .card:hover { transform:translateY(-3px); box-shadow:var(--shadow-lg); }
+    .card .ic { width:34px; height:34px; color:var(--accent); margin-bottom:14px; }
+    .card b { display:block; font-size:17px; margin-bottom:6px; }
+    .card span { color:var(--muted); font-size:15px; }
+
+    .final { text-align:center; background:linear-gradient(180deg, var(--bg-warm), var(--bg));
+             border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+
+    footer { text-align:center; color:var(--muted); font-size:13px; padding:30px 20px; }
+
+    @media (max-width:640px){
+      .steps, .cards { grid-template-columns:1fr; }
+      .leaf { display:none; }
     }
-    .lead {
-      font-size: clamp(17px, 4vw, 21px);
-      color: var(--muted);
-      max-width: 34ch;
-      margin: 0 0 36px;
-    }
-    .points {
-      margin: 48px auto 0;
-      display: grid;
-      gap: 20px;
-      max-width: 560px;
-      text-align: left;
-    }
-    .point {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 18px 20px;
-    }
-    .point b { display: block; margin-bottom: 4px; }
-    .point span { color: var(--muted); font-size: 15px; }
-    footer {
-      text-align: center;
-      color: var(--muted);
-      font-size: 13px;
-      padding: 32px 20px;
-    }
+    .rise { opacity:0; transform:translateY(14px); animation:rise .7s ease forwards; }
+    .rise.d1{animation-delay:.05s}.rise.d2{animation-delay:.12s}.rise.d3{animation-delay:.19s}.rise.d4{animation-delay:.26s}
+    @keyframes rise { to { opacity:1; transform:none; } }
+    @media (prefers-reduced-motion: reduce){ .rise{animation:none;opacity:1;transform:none} }
   </style>
 </head>
 <body>
-  <main class="hero">
-    <div class="wrap">
-      <div class="badge">Свадебный цветочный декор</div>
-      <h1>Соберите букет и сразу узнайте цену</h1>
-      <p class="lead">
-        Наберите цветы, посмотрите букет в 3D и подвиньте каждый цветок руками —
-        туда, куда хотите. Всё в реальных сантиметрах.
-      </p>
-      <a class="btn" href="constructor.html">Собрать букет →</a>
+  <div class="wrap">
+    <nav class="nav">
+      <span class="brand">
+        <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 13c0-3 2-5 2-8 0 0-4 1-4 5" stroke="var(--sage)" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="12" cy="9" r="3.4" fill="var(--accent)"/>
+          <path d="M12 13v8M12 17c-2 0-4-1-5-3M12 18c2 0 4-1 5-3" stroke="var(--sage)" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        Цветочный конструктор
+      </span>
+      <a class="plain" href="hall.html">Зал →</a>
+    </nav>
+  </div>
 
-      <div class="points">
-        <div class="point">
-          <b>Руками, а не автоматом</b>
-          <span>Программа собирает стартовый вариант, а дальше вы двигаете
-          каждый цветок сами — как флорист за столом.</span>
+  <main>
+    <section class="hero">
+      <svg class="leaf l" viewBox="0 0 100 200" fill="none" aria-hidden="true"><path d="M50 200V20M50 70c-18-6-30-24-30-44 20 2 32 18 34 40M50 110c18-6 30-24 30-44-20 2-32 18-34 40" stroke="currentColor" stroke-width="2"/></svg>
+      <svg class="leaf r" viewBox="0 0 100 200" fill="none" aria-hidden="true"><path d="M50 200V20M50 70c-18-6-30-24-30-44 20 2 32 18 34 40M50 110c18-6 30-24 30-44-20 2-32 18-34 40" stroke="currentColor" stroke-width="2"/></svg>
+      <div class="wrap">
+        <div class="badge rise">Свадебный цветочный декор</div>
+        <h1 class="rise d1">Соберите букет <em>руками</em><br>и сразу узнайте цену</h1>
+        <p class="lead rise d2">Наберите цветы, посмотрите букет в 3D и подвиньте каждый цветок туда,
+          куда хотите. Потом накройте стол и расставьте композиции — всё в реальных сантиметрах.</p>
+        <div class="cta rise d3">
+          <a class="btn" href="constructor.html">Собрать букет →</a>
+          <a class="btn btn-ghost" href="hall.html">Открыть зал</a>
         </div>
-        <div class="point">
-          <b>Реальные размеры</b>
-          <span>Ваза 35 см — это 35 см. Сразу видно, влезает букет или нет.</span>
-        </div>
-        <div class="point">
-          <b>Честная смета</b>
-          <span>Цена собирается на глазах: цветы, упаковка, работа — раздельно.</span>
+        <div class="note rise d4">Без установки · работает в браузере · <b>размеры настоящие</b></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Три шага</h2>
+        <p class="sub">Как флорист за столом — только на экране и с ценой.</p>
+        <div class="steps">
+          <div class="step"><div class="n">1</div><b>Наберите</b><span>Выбираете цветы, как в корзине — букет собирается сам.</span></div>
+          <div class="step"><div class="n">2</div><b>Расставьте руками</b><span>Берёте каждый цветок и двигаете туда, куда нужно.</span></div>
+          <div class="step"><div class="n">3</div><b>Накройте стол</b><span>Переносите букеты в зал, ставите копии, проверяете, всё ли влезает.</span></div>
         </div>
       </div>
-    </div>
+    </section>
+
+    <section class="section" style="padding-top:0">
+      <div class="wrap">
+        <div class="cards">
+          <div class="card">
+            <svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 3v18M12 8c-3-2-6-1-8 2 3 2 6 1 8-2M12 8c3-2 6-1 8 2-3 2-6 1-8-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <b>Руками, а не автоматом</b>
+            <span>Программа собирает стартовый вариант, дальше вы двигаете каждый цветок сами.</span>
+          </div>
+          <div class="card">
+            <svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 7v10M20 7v10M4 17h16M8 7v10M16 7v10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <b>Реальные размеры</b>
+            <span>Ваза 35 см — это 35 см. Сразу видно, влезает букет между тарелками или нет.</span>
+          </div>
+          <div class="card">
+            <svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 3v18M8 7a4 3 0 018 0M8 7c0 2 8 2 8 5s-8 3-8 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <b>Честная смета</b>
+            <span>Цена собирается на глазах: цветы, упаковка и работа флориста — раздельно.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section final">
+      <div class="wrap">
+        <h2>Готовы попробовать?</h2>
+        <p class="sub">Соберите первый букет за минуту — ничего устанавливать не нужно.</p>
+        <div class="cta"><a class="btn" href="constructor.html">Собрать букет →</a></div>
+      </div>
+    </section>
   </main>
 
   <footer>
-    Прототип. Показываем логику, не финальную графику.
+    Прототип · показываем логику и реальные размеры, не финальную графику.
   </footer>
 </body>
 </html>

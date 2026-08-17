@@ -76,6 +76,19 @@ body{
 /* ---------- stage ---------- */
 #stage{position:relative;min-width:0;background:radial-gradient(120% 95% at 50% 8%,#FFFFFF 0%,#F0EEE8 62%,#E2DFD7 100%)}
 canvas{display:block;touch-action:none}
+
+/* загрузка сцены */
+.scene-loader{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  color:#8C8880;font-size:13px;letter-spacing:.02em;z-index:4;transition:opacity .4s;
+}
+.scene-loader.gone{opacity:0;pointer-events:none}
+.scene-loader .spin{
+  width:34px;height:34px;border-radius:50%;
+  border:2.5px solid rgba(140,136,128,.25);border-top-color:#B8737E;animation:scene-spin .8s linear infinite;
+}
+@keyframes scene-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){ .scene-loader .spin{animation:none} }
 #hint{
   position:absolute;left:0;right:0;bottom:12px;text-align:center;
   pointer-events:none;color:#8C8880;transition:opacity .5s;

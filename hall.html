@@ -35,6 +35,8 @@
 
 <div id="hint" class="label">Потяните букет мышью — двигать по столу · пустое место — поворот · колесо — зум</div>
 
+<div id="loader" class="scene-loader"><div class="spin"></div>Накрываем стол…</div>
+
 <!-- движок three.js -->
 <script src="assets/js/three.min.js"></script>
 <!-- данные -->
@@ -123,6 +125,16 @@
   const PLATE_R = TABLE_R - 16, PLATE_RAD = 13.5, CHAIR_R = TABLE_R + 24;
   const settingsGroup = new THREE.Group(); scene.add(settingsGroup);
 
+  // мягкая тень-пятно под букетом (заземляет композицию на скатерти)
+  const blobMat = (function(){
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d').createRadialGradient(64,64,4,64,64,62);
+    g.addColorStop(0,'rgba(70,62,54,.28)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    const cx = c.getContext('2d'); cx.fillStyle = g; cx.fillRect(0,0,128,128);
+    return new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c), transparent:true, depthWrite:false});
+  })();
+  const blobGeo = new THREE.PlaneGeometry(1, 1);
+
   const plateMat = new THREE.MeshStandardMaterial({color:0xFAFAF7, roughness:.35, metalness:0});
   const metalMat = new THREE.MeshStandardMaterial({color:0xC7CBD0, roughness:.4, metalness:.5});
   const chairMat = new THREE.MeshStandardMaterial({color:0x8A6E52, roughness:.6});
@@ -195,6 +207,11 @@
     root.position.set(x, TABLE_H, z);
     root.userData.spec = spec;              // храним спецификацию для сохранения
     root.userData.footprint = Math.max(res.focus.radius, 8);   // радиус пятна букета (для проверок)
+    // мягкая тень под букетом на скатерти
+    const shadow = new THREE.Mesh(blobGeo, blobMat);
+    shadow.rotation.x = -Math.PI/2; shadow.position.y = 0.35;
+    const fp = root.userData.footprint; shadow.scale.set(fp*2.6, fp*2.6, 1);
+    root.add(shadow);
     root.userData.grow = 0;                 // мягкое появление
     root.scale.setScalar(0.001);
     scene.add(root); bouquets.push(root);
@@ -340,6 +357,8 @@
 
   updateReadout(); renderWarnings(); saveHall();
   tick();
+  const loader = document.getElementById('loader');   // стол накрыт — убираем загрузку
+  if (loader){ loader.classList.add('gone'); setTimeout(() => loader.remove(), 450); }
 
   // отладочный хук
   window.hallDebug = { scene, camera, cam, bouquets, settingsGroup, placeBouquet, moveBouquet, saveHall,
