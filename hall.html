@@ -184,6 +184,10 @@
   const selRing = new THREE.Mesh(new THREE.TorusGeometry(TABLE_R + 12, 1.6, 8, 64),
     new THREE.MeshStandardMaterial({color:0x9CB08A, roughness:.6, emissive:0x2c3a22}));
   selRing.rotation.x = -Math.PI/2; selRing.position.y = 0.6; selRing.visible = false; scene.add(selRing);
+  // прямоугольная рамка выделения (для банкетных столов)
+  const selRect = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3()]),
+    new THREE.LineBasicMaterial({color:0x9CB08A}));
+  selRect.position.y=1; selRect.visible=false; scene.add(selRect);
 
   // направляющие привязки (выравнивание при перетаскивании)
   const guideMat = new THREE.LineBasicMaterial({color:0xB8737E});
@@ -566,12 +570,20 @@
 
   function selectTable(t){
     selected = t;
-    if (t){ selRing.visible = true; selRing.position.set(t.position.x, 0.6, t.position.z);
-      const base=TABLE_R+12;   // кольцо-эллипс подгоняем под форму стола
-      if(isRect(t)) selRing.scale.set((t.userData.hl+22)/base, 1, (t.userData.hw+22)/base);
-      else selRing.scale.set((tR(t)+12)/base, 1, (tR(t)+12)/base);
+    if (t){
+      if(isRect(t)){
+        const hl=t.userData.hl+18, hw=t.userData.hw+18;
+        selRect.geometry.setFromPoints([new THREE.Vector3(-hl,0,-hw),new THREE.Vector3(hl,0,-hw),new THREE.Vector3(hl,0,hw),new THREE.Vector3(-hl,0,hw)]);
+        selRect.geometry.attributes.position.needsUpdate=true;
+        selRect.position.set(t.position.x,1,t.position.z); selRect.rotation.y=t.rotation.y;
+        selRect.visible=true; selRing.visible=false;
+      } else {
+        selRing.visible = true; selRing.position.set(t.position.x, 0.6, t.position.z);
+        const base=TABLE_R+12; selRing.scale.set((tR(t)+12)/base, 1, (tR(t)+12)/base);
+        selRect.visible=false;
+      }
       document.getElementById('guests').textContent = t.userData.seats; }
-    else selRing.visible = false;
+    else { selRing.visible=false; selRect.visible=false; }
     updatePanel();
   }
 
@@ -596,7 +608,8 @@
         if(Math.abs(x-o.position.x)<Math.min(15,bx)){ bx=Math.abs(x-o.position.x); sx=o.position.x; }
         if(Math.abs(z-o.position.z)<Math.min(15,bz)){ bz=Math.abs(z-o.position.z); sz=o.position.z; } });
       if(sx!=null){ x=sx; showGuide(guideX,false,sx); } if(sz!=null){ z=sz; showGuide(guideZ,true,sz); }
-      t.position.x=x; t.position.z=z; selRing.position.set(x,0.6,z);
+      t.position.x=x; t.position.z=z;
+      if(isRect(t)) selRect.position.set(x,1,z); else selRing.position.set(x,0.6,z);
     } else {
       // букет/прибор: свободно тянем (учитываем поворот стола)
       let [lx,lz]=worldToLocal(t, p.x, p.z);
