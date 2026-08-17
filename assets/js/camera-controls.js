@@ -48,14 +48,17 @@ window.createCameraControls = function(camera, el, opts){
 
   const ptrs = new Map();
   let last2 = null;
+  let paused = false;   // на паузе, пока пользователь тащит цветок
 
   el.addEventListener('pointerdown', e => {
+    if (paused) return;
     if (opts.onInteract) opts.onInteract();
-    el.setPointerCapture(e.pointerId);
+    try { el.setPointerCapture(e.pointerId); } catch(_){}
     ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY, btn:e.button, shift:e.shiftKey});
     vaz = vpol = 0;
   });
   el.addEventListener('pointermove', e => {
+    if (paused) return;
     const p = ptrs.get(e.pointerId); if (!p) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
@@ -104,5 +107,11 @@ window.createCameraControls = function(camera, el, opts){
     }
   }
 
-  return { place, frame, updateInertia, getPointerCount: () => ptrs.size };
+  // Пауза на время перетаскивания цветка: камера замирает и сбрасывает жест.
+  function setPaused(v){
+    paused = v;
+    if (v){ ptrs.clear(); last2 = null; vaz = vpol = 0; }
+  }
+
+  return { place, frame, updateInertia, setPaused, getPointerCount: () => ptrs.size };
 };

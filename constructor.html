@@ -24,14 +24,14 @@
   </section>
 
   <section id="stage">
-    <div id="tools"><button id="variant">Другой вариант укладки</button><button id="reset">Вернуть вид</button></div>
+    <div id="tools"><button id="variant">Другой вариант укладки</button><button id="relayout">Собрать заново</button><button id="reset">Вернуть вид</button></div>
     <div id="empty">
       <div>
         <div class="serif">Пусто</div>
         <p>Добавьте первый стебель слева</p>
       </div>
     </div>
-    <div id="hint" class="label">Палец — поворот · два пальца — зум и сдвиг · двойное касание — сброс</div>
+    <div id="hint" class="label">Потяните цветок мышью — переставить · пустое место — поворот · колесо — зум</div>
   </section>
 
   <section id="recipe">
@@ -68,6 +68,7 @@
 <script src="assets/js/model-loader.js"></script>
 <script src="assets/js/bouquet-engine.js"></script>
 <script src="assets/js/camera-controls.js"></script>
+<script src="assets/js/flower-drag.js"></script>
 <script src="assets/js/catalog-render.js"></script>
 
 <!-- 4) склейка: сцена, пересборка букета, запуск -->
@@ -112,8 +113,19 @@
   const UP = new THREE.Vector3(0,1,0);
   const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Нацелить цилиндр-стебель от точки p0 к p1. Возвращает направление.
+  function aimCyl(mesh, p0, p1){
+    const v = p1.clone().sub(p0), L = Math.max(v.length(), 0.001), d = v.clone().normalize();
+    mesh.scale.y = L;
+    mesh.quaternion.setFromUnitVectors(UP, d);
+    mesh.position.copy(p0).addScaledVector(d, L*0.5);
+    return d;
+  }
+  function makeCyl(p0, p1){ const m = new THREE.Mesh(stemGeo, stemMat); aimCyl(m, p0, p1); return m; }
+
   // кадрирование: обновляется при каждой пересборке
   let FOCUS = new THREE.Vector3(0,32,0), FIT = 110, firstBuild = true, growT = 1;
+  let manual = {};   // idx -> Vector3: цветы, переставленные руками в текущей раскладке
 
   // --- камера ---
   const cam = window.createCameraControls(camera, renderer.domElement, {
@@ -123,6 +135,26 @@
 
   // --- UI каталога ---
   const ui = window.CatalogUI.init(state, { onChange: rebuild });
+
+  // Переставить цветок руками: бутон едет в target, стебель дотягивается,
+  // низ у горловины (или в руке) остаётся на месте.
+  function moveFlower(g, target){
+    const dir = aimCyl(g.userData.aimStem, g.userData.base, target);
+    g.userData.head.position.copy(target);
+    g.userData.head.quaternion.setFromUnitVectors(UP, dir);
+    g.userData.headPos.copy(target);
+    manual[g.userData.idx] = target.clone();
+  }
+
+  // --- движок ручной расстановки ---
+  const drag = window.createFlowerDrag(camera, renderer.domElement, {
+    getPickables: () => bouquet.children,
+    canGrab: () => growT >= 1,                          // только когда букет вырос
+    moveTo: moveFlower,
+    setCameraPaused: (v) => cam.setPaused(v),
+    onGrab: (g) => { g.userData.head.scale.setScalar(1.14); document.getElementById('hint').classList.add('gone'); },
+    onRelease: (g) => { g.userData.head.scale.setScalar(1); },
+  });
 
   function drawVase(){
     while (vaseGroup.children.length) vaseGroup.remove(vaseGroup.children[0]);
@@ -137,49 +169,37 @@
 
   function rebuild(){
     while (bouquet.children.length) bouquet.remove(bouquet.children[0]);
+    manual = {};                       // новая авто-раскладка — ручные сдвиги сбрасываются
     const vase = drawVase();
     const {stems, s} = layout(state.cart, state.vaseId, state.variantSeed);
     const rnd = mulberry32(cartSeed(state.cart, state.variantSeed) + 11);
     // Точка выхода стеблей: в вазе — устье горловины, иначе — рука.
     const ORIGIN = vase ? new THREE.Vector3(0, vase.V.height_cm*0.95, 0) : new THREE.Vector3(0,0,0);
     const NECK = vase ? vase.A.neck*vase.V.height_cm*0.72 : 0;
-    const stemParts = [];
     stems.forEach((st, idx) => {
-      const base = ORIGIN.clone();
+      const g = new THREE.Group();
+      let base;
       if (vase){
         // низ стебля слегка расходится внутри горловины — как в жизни
+        const ob = ORIGIN.clone();
         const a = idx*GOLDEN, rr = NECK*Math.sqrt((idx+0.5)/stems.length);
-        base.x += Math.cos(a)*rr; base.z += Math.sin(a)*rr;
-        // колено чуть выше среза: ниже него стебель идёт вертикально
-        const knee = new THREE.Vector3(base.x, vase.V.height_cm*1.06, base.z);
-        [[base,knee],[knee,st.pos]].forEach(([p0,p1]) => {
-          const v = p1.clone().sub(p0), L = v.length();
-          if (L < 0.01) return;
-          const d = v.clone().normalize();
-          const m = new THREE.Mesh(stemGeo, stemMat);
-          m.scale.y = L;
-          m.quaternion.setFromUnitVectors(UP, d);
-          m.position.copy(p0).addScaledVector(d, L*0.5);
-          stemParts.push(m);
-        });
-        base.copy(knee);
+        ob.x += Math.cos(a)*rr; ob.z += Math.sin(a)*rr;
+        // колено чуть выше среза: нижний сегмент фиксирован в горловине
+        const knee = new THREE.Vector3(ob.x, vase.V.height_cm*1.06, ob.z);
+        g.add(makeCyl(ob, knee));
+        base = knee;
+      } else {
+        base = ORIGIN.clone();         // точка связки в руке
       }
-      const vec = st.pos.clone().sub(base);
-      const len = vec.length();
-      const dir = vec.clone().normalize();
-      const q = new THREE.Quaternion().setFromUnitVectors(UP, dir);
-
-      const stem = new THREE.Mesh(stemGeo, stemMat);
-      stem.scale.y = vase ? 0.001 : len; stem.quaternion.copy(q);
-      stem.position.copy(base).addScaledVector(dir, len*0.5);
-
+      // стебель-«прицел»: от точки связки к бутону, дотягивается при перетаскивании
+      const aim = makeCyl(base, st.pos);
+      const dir = st.pos.clone().sub(base).normalize();
       const head = window.ModelLoader.bloomMesh(st.item, rnd);
-      head.position.copy(st.pos); head.quaternion.copy(q);
-
-      const g = new THREE.Group();
-      while (stemParts.length) g.add(stemParts.pop());
-      g.add(stem); g.add(head);
-      g.userData.delay = idx*0.012; g.scale.setScalar(REDUCED ? 1 : 0.001);
+      head.position.copy(st.pos);
+      head.quaternion.setFromUnitVectors(UP, dir);
+      g.add(aim); g.add(head);
+      g.userData = { delay: idx*0.012, idx, base: base.clone(), headPos: st.pos.clone(), aimStem: aim, head };
+      g.scale.setScalar(REDUCED ? 1 : 0.001);
       bouquet.add(g);
     });
 
@@ -233,11 +253,21 @@
 
   // --- кнопки сцены ---
   document.getElementById('variant').addEventListener('click', () => { state.variantSeed++; rebuild(); });
+  document.getElementById('relayout').addEventListener('click', () => rebuild());   // вернуть авто-раскладку
   document.getElementById('reset').addEventListener('click', () => cam.frame(FOCUS, FIT, false));
 
   // --- старт: тот самый пример ---
   state.cart.red = 3; state.cart.tul = 2; state.cart.eus = 3;
   ui.drawAll(); resize(); cam.place(); rebuild(); tick();
+
+  // Отладочный хук: доступ к сцене для тестов и диагностики. В проде безвреден.
+  window.constructorDebug = {
+    scene, camera, bouquet, cam, drag, moveFlower, rebuild, state,
+    project: (v) => { const p = v.clone().project(camera); const r = renderer.domElement.getBoundingClientRect();
+      return { x: r.left + (p.x*0.5+0.5)*r.width, y: r.top + (-p.y*0.5+0.5)*r.height }; },
+    get growT(){ return growT; }, get manual(){ return manual; },
+    finishGrow: () => { growT = 1; bouquet.children.forEach(g => g.scale.setScalar(1)); },
+  };
 })();
 </script>
 </body>
