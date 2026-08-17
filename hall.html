@@ -154,7 +154,7 @@
 
   // === ЖИВЫЕ РАЗМЕРЫ (для декоратора) ===
   // Пул линий + DOM-подписей. При перетаскивании показываем реальные зазоры в см.
-  const DIM_N = 4, dimLines = [], dimEls = [];
+  const DIM_N = 6, dimLines = [], dimEls = [];
   const dimsWrap = document.getElementById('dims'), sizesWrap = document.getElementById('sizes');
   const rect = () => renderer.domElement.getBoundingClientRect();
   const projScreen = (v) => { const p=v.clone().project(camera), r=rect(); return {x:r.left+(p.x*.5+.5)*r.width, y:r.top+(-p.y*.5+.5)*r.height}; };
@@ -180,9 +180,12 @@
   function computeDims(obj){
     const t=obj.userData.table, dims=[], wa=new THREE.Vector3(); obj.getWorldPosition(wa);
     if (obj.userData.kind === 'table'){
-      let best=Infinity,bt=null; tables.forEach(o=>{ if(o===t)return; const d=Math.hypot(o.position.x-t.position.x,o.position.z-t.position.z); if(d<best){best=d;bt=o;} });
-      if(bt){ const gap=Math.round(best-2*CHAIR_OUTER);
-        dims.push({a:new THREE.Vector3(t.position.x,TABLE_H+8,t.position.z), b:new THREE.Vector3(bt.position.x,TABLE_H+8,bt.position.z), text:`проход между стульями: ${gap} см`, warn:gap<40}); }
+      // проход до ВСЕХ окружающих столов (ближайшие со всех сторон)
+      const near = tables.filter(o=>o!==t)
+        .map(o=>({o, d:Math.hypot(o.position.x-t.position.x, o.position.z-t.position.z)}))
+        .sort((a,b)=>a.d-b.d).slice(0, DIM_N);
+      near.forEach(({o,d})=>{ const gap=Math.round(d-2*CHAIR_OUTER);
+        dims.push({a:new THREE.Vector3(t.position.x,TABLE_H+8,t.position.z), b:new THREE.Vector3(o.position.x,TABLE_H+8,o.position.z), text:`${gap} см`, warn:gap<40}); });
       return dims;
     }
     const lx=obj.position.x, lz=obj.position.z, rad=Math.hypot(lx,lz), fp=obj.userData.footprint||6;
@@ -296,6 +299,7 @@
     if (tables.length){ cx/=tables.length; cz/=tables.length; }
     let spread = TABLE_R;
     tables.forEach(t=> spread = Math.max(spread, Math.hypot(t.position.x-cx, t.position.z-cz)+TABLE_R));
+    if (venueBounds){ cx=venueBounds.cx; cz=venueBounds.cz; spread=Math.max(spread, venueBounds.radius); }
     FOCUS.set(cx, TABLE_H, cz);
     const R = Math.max(Math.hypot(spread, 60), 80);
     const fov = camera.fov*Math.PI/180;
@@ -516,8 +520,16 @@
   document.getElementById('stand-btn').addEventListener('click', () => standUp());
 
   // --- загрузка своего зала (скан GLB/GLTF) ---
-  let venueModel = null;
+  let venueModel = null, venueBounds = null;
   const gltfLoader = new THREE.GLTFLoader();
+  // границы загруженной комнаты → запираем камеру и ходьбу внутри
+  function updateVenueBounds(){
+    if(!venueModel){ venueBounds=null; cam.setLimits({panRadius:2000, panY:[-10,300], distMax:3500}); return; }
+    const b=new THREE.Box3().setFromObject(venueModel);
+    venueBounds={ minX:b.min.x, maxX:b.max.x, minZ:b.min.z, maxZ:b.max.z, height:b.max.y,
+      cx:(b.min.x+b.max.x)/2, cz:(b.min.z+b.max.z)/2, radius:Math.hypot((b.max.x-b.min.x)/2,(b.max.z-b.min.z)/2) };
+    cam.setLimits({ panRadius:venueBounds.radius*0.95, panY:[0, Math.min(venueBounds.height,260)], distMax:venueBounds.radius*2.4 });
+  }
   const vmsg = document.getElementById('venue-msg');
   function showMsg(t, keep){ vmsg.textContent=t; vmsg.className='show'; if(!keep) setTimeout(()=>vmsg.className='', 3000); }
   function loadVenueFile(file){
@@ -535,6 +547,7 @@
       m.traverse(o=>{ if(o.isMesh){ o.receiveShadow=true; o.castShadow=true; if(o.material) o.material.side=THREE.DoubleSide; } });
       scene.add(m); venueModel=m; floor.visible=false;
       document.getElementById('venue-adjust').style.display='flex';
+      updateVenueBounds();                       // запереть камеру/ходьбу внутри комнаты
       const d=new THREE.Box3().setFromObject(m).getSize(new THREE.Vector3());
       showMsg(`Зал загружен: ${Math.round(d.x)}×${Math.round(d.z)} см, высота ${Math.round(d.y)} см`);
       frameAll();
@@ -542,9 +555,9 @@
   }
   document.getElementById('load-venue').addEventListener('click', ()=> document.getElementById('venue-file').click());
   document.getElementById('venue-file').addEventListener('change', (e)=>{ const f=e.target.files[0]; if(f) loadVenueFile(f); e.target.value=''; });
-  document.getElementById('venue-rot-l').addEventListener('click', ()=>{ if(venueModel) venueModel.rotation.y += Math.PI/12; });
-  document.getElementById('venue-rot-r').addEventListener('click', ()=>{ if(venueModel) venueModel.rotation.y -= Math.PI/12; });
-  document.getElementById('clear-venue').addEventListener('click', ()=>{ if(venueModel){ scene.remove(venueModel); venueModel=null; } floor.visible=true; document.getElementById('venue-adjust').style.display='none'; showMsg('Стандартный пол возвращён'); });
+  document.getElementById('venue-rot-l').addEventListener('click', ()=>{ if(venueModel){ venueModel.rotation.y += Math.PI/12; updateVenueBounds(); } });
+  document.getElementById('venue-rot-r').addEventListener('click', ()=>{ if(venueModel){ venueModel.rotation.y -= Math.PI/12; updateVenueBounds(); } });
+  document.getElementById('clear-venue').addEventListener('click', ()=>{ if(venueModel){ scene.remove(venueModel); venueModel=null; } venueBounds=null; updateVenueBounds(); floor.visible=true; document.getElementById('venue-adjust').style.display='none'; showMsg('Стандартный пол возвращён'); });
 
   // --- поделиться с клиентом: ссылка со всей расстановкой ---
   document.getElementById('share-btn').addEventListener('click', ()=>{
@@ -579,10 +592,16 @@
     document.body.classList.add('walk-mode'); document.getElementById('hint').classList.add('gone');
     fade(()=>{
       mode='walk'; cam.setPaused(true);
-      const R = venueRadius()+130, a = Math.PI*0.28;   // старт у края зала лицом к центру, стоя
-      walk.x = Math.cos(a)*R; walk.z = Math.sin(a)*R; walk.eye = walk.teye = EYE_STAND;
+      if (venueBounds){                                  // старт ВНУТРИ загруженной комнаты
+        walk.x = venueBounds.cx; walk.z = venueBounds.cz + (venueBounds.maxZ-venueBounds.cz)*0.55;
+        walk.yaw = Math.atan2(venueBounds.cx-walk.x, venueBounds.cz-walk.z);
+      } else {
+        const R = venueRadius()+130, a = Math.PI*0.28;   // старт у края зала лицом к центру
+        walk.x = Math.cos(a)*R; walk.z = Math.sin(a)*R;
+        walk.yaw = Math.atan2(-walk.x, -walk.z);
+      }
+      walk.eye = walk.teye = EYE_STAND; walk.pitch = -0.02;
       walk.vx = walk.vz = 0; walk.goto = null; walk.face = null; walk.bob = 0;
-      walk.yaw = Math.atan2(-walk.x, -walk.z); walk.pitch = -0.02;
       selRing.visible = false;
     });
   }
@@ -629,6 +648,11 @@
     if(walk.goto){ walk.x+=(walk.goto.x-walk.x)*0.09; walk.z+=(walk.goto.z-walk.z)*0.09; if(Math.hypot(walk.goto.x-walk.x,walk.goto.z-walk.z)<3) walk.goto=null; }
     // не заходить сквозь столы
     tables.forEach(t=>{ const dx=walk.x-t.position.x, dz=walk.z-t.position.z, d=Math.hypot(dx,dz), R=TABLE_R+16; if(d<R&&d>0.01){ walk.x=t.position.x+dx/d*R; walk.z=t.position.z+dz/d*R; walk.vx*=0.3; walk.vz*=0.3; } });
+    // не выходить за стены загруженной комнаты
+    if(venueBounds){ const mg=35;
+      if(walk.x<venueBounds.minX+mg){walk.x=venueBounds.minX+mg;walk.vx=0;} if(walk.x>venueBounds.maxX-mg){walk.x=venueBounds.maxX-mg;walk.vx=0;}
+      if(walk.z<venueBounds.minZ+mg){walk.z=venueBounds.minZ+mg;walk.vz=0;} if(walk.z>venueBounds.maxZ-mg){walk.z=venueBounds.maxZ-mg;walk.vz=0;}
+    }
     walk.eye+=(walk.teye-walk.eye)*0.15; if(Math.abs(walk.eye-walk.teye)<0.4) walk.eye=walk.teye;
     // авто-поворот к столу при посадке (плавно)
     if(walk.face){

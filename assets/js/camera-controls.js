@@ -15,11 +15,13 @@
    ============================================================ */
 window.createCameraControls = function(camera, el, opts){
   opts = opts || {};
-  const DMIN = opts.distMin || 3.5, DMAX = opts.distMax || 300;
-  const PAN_R = opts.panRadius || 40;              // насколько далеко можно увести центр обзора
-  const PAN_Y = opts.panY || [-10, 120];           // пределы высоты центра
+  let DMIN = opts.distMin || 3.5, DMAX = opts.distMax || 300;
+  let PAN_R = opts.panRadius || 40;                // насколько далеко можно увести центр обзора
+  let PAN_Y = opts.panY || [-10, 120];             // пределы высоты центра
   const POL = opts.polRange || [.30, 1.70];        // наклон: меньше — вид сверху
   const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+  // Динамически менять пределы (например, запереть камеру внутри загруженного зала).
+  function setLimits(o){ o=o||{}; if(o.distMax!=null)DMAX=o.distMax; if(o.distMin!=null)DMIN=o.distMin; if(o.panRadius!=null)PAN_R=o.panRadius; if(o.panY!=null)PAN_Y=o.panY; dist=clamp(dist,DMIN,DMAX); pan(0,0); }
 
   let az = .7, pol = 1.28, dist = 110;
   const target = new THREE.Vector3(0, 32, 0);
@@ -116,5 +118,5 @@ window.createCameraControls = function(camera, el, opts){
     if (v){ ptrs.clear(); last2 = null; vaz = vpol = 0; }
   }
 
-  return { place, frame, updateInertia, setPaused, getPointerCount: () => ptrs.size };
+  return { place, frame, updateInertia, setPaused, setLimits, getPointerCount: () => ptrs.size };
 };
