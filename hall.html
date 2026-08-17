@@ -87,6 +87,11 @@
 
 <div id="hint" class="label">Тяните букет/тарелку — по столу · скатерть — двигаете стол · двойной клик по столу — подлететь · колесо — зум</div>
 <div id="fade"></div>
+<div id="objmenu">
+  <button data-act="dup">⧉ Дублировать</button>
+  <button data-act="edit">✎ Изменить в конструкторе</button>
+  <button data-act="del" class="del">🗑 Удалить</button>
+</div>
 <div id="loader" class="scene-loader"><div class="spin"></div>Накрываем столы…</div>
 
 <script src="assets/js/three.min.js"></script>
@@ -161,6 +166,17 @@
   const selRing = new THREE.Mesh(new THREE.TorusGeometry(TABLE_R + 12, 1.6, 8, 64),
     new THREE.MeshStandardMaterial({color:0x9CB08A, roughness:.6, emissive:0x2c3a22}));
   selRing.rotation.x = -Math.PI/2; selRing.position.y = 0.6; selRing.visible = false; scene.add(selRing);
+
+  // направляющие привязки (выравнивание при перетаскивании)
+  const guideMat = new THREE.LineBasicMaterial({color:0xB8737E});
+  function mkGuide(){ const g=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]), guideMat); g.visible=false; scene.add(g); return g; }
+  const guideX = mkGuide(), guideZ = mkGuide();
+  function showGuide(g, horizontal, at){
+    const y=2, L=1500;
+    g.geometry.setFromPoints(horizontal ? [new THREE.Vector3(-L,y,at),new THREE.Vector3(L,y,at)] : [new THREE.Vector3(at,y,-L),new THREE.Vector3(at,y,L)]);
+    g.geometry.attributes.position.needsUpdate=true; g.visible=true;
+  }
+  function hideGuides(){ guideX.visible=false; guideZ.visible=false; }
 
   // === ЖИВЫЕ РАЗМЕРЫ (для декоратора) ===
   // Пул линий + DOM-подписей. При перетаскивании показываем реальные зазоры в см.
@@ -437,10 +453,20 @@
     const t = obj.userData.table;
     if (obj.userData.kind === 'table'){
       let x=p.x, z=p.z; const r=Math.hypot(x,z); if (r>FLOOR_R){ x*=FLOOR_R/r; z*=FLOOR_R/r; }
+      // привязка: выравниваем по X/Z с ближайшим столом (в ряд)
+      hideGuides(); let sx=null, sz=null, bx=1e9, bz=1e9;
+      tables.forEach(o=>{ if(o===t)return;
+        if(Math.abs(x-o.position.x)<Math.min(15,bx)){ bx=Math.abs(x-o.position.x); sx=o.position.x; }
+        if(Math.abs(z-o.position.z)<Math.min(15,bz)){ bz=Math.abs(z-o.position.z); sz=o.position.z; } });
+      if(sx!=null){ x=sx; showGuide(guideX,false,sx); } if(sz!=null){ z=sz; showGuide(guideZ,true,sz); }
       t.position.x=x; t.position.z=z; selRing.position.set(x,0.6,z);
     } else {
-      let lx=p.x - t.position.x, lz=p.z - t.position.z; const r=Math.hypot(lx,lz);
-      if (r>ITEM_EDGE){ lx*=ITEM_EDGE/r; lz*=ITEM_EDGE/r; }
+      // букет/прибор: свободно тянем в мировых координатах (можно на другой стол)
+      let lx=p.x - t.position.x, lz=p.z - t.position.z;
+      if (obj.userData.kind==='setting'){ const r=Math.hypot(lx,lz); if(r>ITEM_EDGE){ lx*=ITEM_EDGE/r; lz*=ITEM_EDGE/r; } }
+      else { // букет — привязка к центру стола, но без жёсткого клэмпа (для переноса)
+        if(Math.hypot(lx,lz)<12){ lx=0; lz=0; }
+      }
       obj.position.x=lx; obj.position.z=lz;
     }
     renderDims(computeDims(obj));
@@ -457,9 +483,42 @@
       if(o.userData.kind==='bouquet') currentSpec = o.userData.spec;   // тронутый букет становится «текущим» для копии
       dragSnap = snapshot();                                           // снимок до перетаскивания (для отмены)
       document.getElementById('hint').classList.add('gone'); },
-    onRelease: () => { if(dragSnap && dragSnap!==snapshot()) pushSnap(dragSnap); dragSnap=null;   // записываем в историю только реальное перемещение
-      clearDims(); updateReadout(); saveHall(); renderWarnings(); },
+    onRelease: (o) => {
+      if(o && o.userData.kind==='bouquet') dropBouquetToNearestTable(o);   // букет можно перенести на другой стол
+      if(dragSnap && dragSnap!==snapshot()) pushSnap(dragSnap); dragSnap=null;
+      hideGuides(); clearDims(); updateReadout(); saveHall(); renderWarnings();
+    },
+    onClick: (o) => { if(o && o.userData.kind==='bouquet') openBouquetMenu(o); },   // клик без движения — меню
   });
+
+  // Меню по клику на букет: дублировать / изменить / удалить.
+  let menuTarget = null;
+  function openBouquetMenu(b, e){
+    menuTarget = b; const m=document.getElementById('objmenu');
+    const x=(e&&e.clientX)||200, y=(e&&e.clientY)||200;
+    m.style.left=Math.min(x, innerWidth-210)+'px'; m.style.top=Math.min(y, innerHeight-150)+'px';
+    m.classList.add('show');
+  }
+  function closeMenu(){ document.getElementById('objmenu').classList.remove('show'); menuTarget=null; }
+  document.getElementById('objmenu').addEventListener('click', (e)=>{
+    const act=e.target.dataset.act; if(!act||!menuTarget) return; const b=menuTarget, t=b.userData.table;
+    if(act==='dup'){ pushHistory(); const [x,z]=nextBouquetSpot(t); addBouquet(t, b.userData.spec, x, z); afterChange(false); }
+    else if(act==='del'){ pushHistory(); t.userData.bouquets.remove(b); afterChange(false); }
+    else if(act==='edit'){ try{ localStorage.setItem('flowerEditCart', JSON.stringify(b.userData.spec)); }catch(_){} location.href='constructor.html'; return; }
+    closeMenu();
+  });
+  addEventListener('pointerdown', (e)=>{ if(!e.target.closest('#objmenu')) closeMenu(); }, true);
+
+  // Перенос букета на ближайший стол (кросс-таблица).
+  function dropBouquetToNearestTable(b){
+    const wx=b.userData.table.position.x + b.position.x, wz=b.userData.table.position.z + b.position.z;
+    let best=Infinity, nt=b.userData.table;
+    tables.forEach(t=>{ const d=Math.hypot(wx-t.position.x, wz-t.position.z); if(d<best){ best=d; nt=t; } });
+    if(nt!==b.userData.table){ nt.userData.bouquets.add(b); b.userData.table=nt; selectTable(nt); }
+    let lx=wx-nt.position.x, lz=wz-nt.position.z; const r=Math.hypot(lx,lz);
+    if(r>ITEM_EDGE){ lx*=ITEM_EDGE/r; lz*=ITEM_EDGE/r; }
+    b.position.x=lx; b.position.z=lz;
+  }
 
   // Двойной клик по столу — камера подлетает к нему (легко переходить между столами).
   const rc = new THREE.Raycaster(), nd = new THREE.Vector2();
@@ -746,7 +805,8 @@
   const loader=document.getElementById('loader'); if(loader){ loader.classList.add('gone'); setTimeout(()=>loader.remove(),450); }
 
   window.hallDebug = { scene, camera, cam, tables, get selected(){return selected;}, createTable, addBouquet, computeWarnings, drag, TABLE_R, TABLE_H, pickables,
-    enterWalk, exitWalk, sitAt, updateWalk, walk, keys, get mode(){return mode;} };
+    enterWalk, exitWalk, sitAt, updateWalk, walk, keys, get mode(){return mode;},
+    dropBouquetToNearestTable, openBouquetMenu };
 })();
 </script>
 </body>

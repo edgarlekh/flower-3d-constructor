@@ -240,8 +240,17 @@
     location.href = 'hall.html';
   });
 
-  // --- старт: тот самый пример ---
-  state.cart.red = 3; state.cart.tul = 2; state.cart.eus = 3;
+  // --- старт: букет на редактирование из зала («Изменить») или пример ---
+  let edit = null;
+  try { edit = JSON.parse(localStorage.getItem('flowerEditCart')); } catch(_){}
+  if (edit && edit.cart){
+    Object.assign(state.cart, edit.cart);
+    if (edit.vaseId) state.vaseId = edit.vaseId;
+    if (edit.variantSeed) state.variantSeed = edit.variantSeed;
+    localStorage.removeItem('flowerEditCart');
+  } else {
+    state.cart.red = 3; state.cart.tul = 2; state.cart.eus = 3;
+  }
   ui.drawAll(); resize(); cam.place(); rebuild(); tick();
   const loader = document.getElementById('loader');   // сцена готова — убираем загрузку
   if (loader){ loader.classList.add('gone'); setTimeout(() => loader.remove(), 450); }

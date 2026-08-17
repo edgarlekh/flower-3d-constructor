@@ -23,7 +23,7 @@ window.createFlowerDrag = function(camera, el, opts){
   const hit = new THREE.Vector3();
   const grabOffset = new THREE.Vector3();
   const camDir = new THREE.Vector3();
-  let active = null, activePointer = null, hovered = null;
+  let active = null, activePointer = null, hovered = null, downXY = null;
 
   function toNDC(e){
     const r = el.getBoundingClientRect();
@@ -46,7 +46,7 @@ window.createFlowerDrag = function(camera, el, opts){
     if (active || (opts.canGrab && !opts.canGrab())) return;
     const g = pick(e);
     if (!g) return;                          // мимо цветка — пусть работает камера
-    active = g; activePointer = e.pointerId;
+    active = g; activePointer = e.pointerId; downXY = {x:e.clientX, y:e.clientY};
     try { el.setPointerCapture(e.pointerId); } catch(_){}
     opts.setCameraPaused(true);
     // точка захвата и плоскость перетаскивания
@@ -88,7 +88,10 @@ window.createFlowerDrag = function(camera, el, opts){
     const g = active; active = null; activePointer = null;
     opts.setCameraPaused(false);
     el.style.cursor = '';
+    const wasClick = downXY && Math.hypot(e.clientX-downXY.x, e.clientY-downXY.y) < 5;  // почти не двигали = клик
+    downXY = null;
     if (opts.onRelease) opts.onRelease(g);
+    if (wasClick && opts.onClick) opts.onClick(g, e);
     e.stopPropagation();
   }
   el.addEventListener('pointerup', end, true);
