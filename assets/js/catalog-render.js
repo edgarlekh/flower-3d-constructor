@@ -13,7 +13,10 @@ window.CatalogUI = (function(){
   const hex6 = c => c.toString(16).padStart(6,'0');
 
   function init(state, cb){
-    const onChange = (cb && cb.onChange) || function(){};
+    cb = cb || {};
+    // состав корзины меняется — ручную раскладку сохраняем; ваза меняется — сбрасываем
+    const onCartChange = cb.onCartChange || cb.onChange || function(){};
+    const onVaseChange = cb.onVaseChange || cb.onChange || function(){};
     const listEl = $('list'), vaseListEl = $('vaselist'), notesEl = $('notes');
 
     function drawVaseList(){
@@ -75,19 +78,19 @@ window.CatalogUI = (function(){
     vaseListEl.addEventListener('click', e => {
       const vrow = e.target.closest('[data-vase]');
       if (!vrow) return;
-      state.vaseId = vrow.dataset.vase; drawVaseList(); onChange();
+      state.vaseId = vrow.dataset.vase; drawVaseList(); onVaseChange();
     });
     listEl.addEventListener('click', e => {
       const p = e.target.dataset.p, m = e.target.dataset.m;
       if (p) state.cart[p] = Math.min(30, (state.cart[p]||0) + 1);
       else if (m) state.cart[m] = Math.max(0, (state.cart[m]||0) - 1);
       else return;
-      drawCatalog(); onChange();
+      drawCatalog(); onCartChange();
     });
     notesEl.addEventListener('click', e => {
       const id = e.target.dataset.add; if (!id) return;
       state.cart[id] = Math.min(30, (state.cart[id]||0) + (+e.target.dataset.q));
-      drawCatalog(); onChange();
+      drawCatalog(); onCartChange();
     });
 
     return { drawAll, renderRecipe };

@@ -134,7 +134,10 @@
   });
 
   // --- UI каталога ---
-  const ui = window.CatalogUI.init(state, { onChange: rebuild });
+  const ui = window.CatalogUI.init(state, {
+    onCartChange: () => rebuild(true),    // тронули состав — ручную раскладку сохраняем
+    onVaseChange: () => rebuild(false),   // сменили вазу — раскладываем заново
+  });
 
   // Переставить цветок руками: бутон едет в target, стебель дотягивается,
   // низ у горловины (или в руке) остаётся на месте.
@@ -143,7 +146,7 @@
     g.userData.head.position.copy(target);
     g.userData.head.quaternion.setFromUnitVectors(UP, dir);
     g.userData.headPos.copy(target);
-    manual[g.userData.idx] = target.clone();
+    manual[g.userData.key] = target.clone();     // запоминаем по устойчивому ключу
   }
 
   // --- движок ручной расстановки ---
@@ -167,16 +170,27 @@
     return {V, A};
   }
 
-  function rebuild(){
+  // keepManual=true: сохранить ручную раскладку (меняли только состав корзины).
+  // По умолчанию (смена вазы, вариант, «собрать заново») — сбрасываем.
+  function rebuild(keepManual){
     while (bouquet.children.length) bouquet.remove(bouquet.children[0]);
-    manual = {};                       // новая авто-раскладка — ручные сдвиги сбрасываются
+    if (!keepManual) manual = {};
     const vase = drawVase();
     const {stems, s} = layout(state.cart, state.vaseId, state.variantSeed);
     const rnd = mulberry32(cartSeed(state.cart, state.variantSeed) + 11);
     // Точка выхода стеблей: в вазе — устье горловины, иначе — рука.
     const ORIGIN = vase ? new THREE.Vector3(0, vase.V.height_cm*0.95, 0) : new THREE.Vector3(0,0,0);
     const NECK = vase ? vase.A.neck*vase.V.height_cm*0.72 : 0;
+    const occ = {};                    // счётчик повторов на позицию каталога
+    const usedKeys = {};
     stems.forEach((st, idx) => {
+      // устойчивый ключ цветка: id#номер-повтора. Переживает +/- количества.
+      const n = occ[st.item.id] = (occ[st.item.id] || 0) + 1;
+      const key = st.item.id + '#' + (n - 1);
+      usedKeys[key] = true;
+      // если этот цветок двигали руками и раскладку сохраняем — берём ручную точку
+      const headPos = (keepManual && manual[key]) ? manual[key].clone() : st.pos.clone();
+
       const g = new THREE.Group();
       let base;
       if (vase){
@@ -192,16 +206,18 @@
         base = ORIGIN.clone();         // точка связки в руке
       }
       // стебель-«прицел»: от точки связки к бутону, дотягивается при перетаскивании
-      const aim = makeCyl(base, st.pos);
-      const dir = st.pos.clone().sub(base).normalize();
+      const aim = makeCyl(base, headPos);
+      const dir = headPos.clone().sub(base).normalize();
       const head = window.ModelLoader.bloomMesh(st.item, rnd);
-      head.position.copy(st.pos);
+      head.position.copy(headPos);
       head.quaternion.setFromUnitVectors(UP, dir);
       g.add(aim); g.add(head);
-      g.userData = { delay: idx*0.012, idx, base: base.clone(), headPos: st.pos.clone(), aimStem: aim, head };
+      g.userData = { delay: idx*0.012, idx, key, base: base.clone(), headPos: headPos.clone(), aimStem: aim, head };
       g.scale.setScalar(REDUCED ? 1 : 0.001);
       bouquet.add(g);
     });
+    // выкидываем ручные точки цветов, которых больше нет в букете
+    for (const k in manual) if (!usedKeys[k]) delete manual[k];
 
     // Кадрируем по реальным габаритам сцены, а не на глаз.
     if (stems.length || vase){
