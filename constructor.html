@@ -16,6 +16,15 @@
       <h1 class="serif">Конструктор букета</h1>
       <p>Наберите стебли, как в корзине. Букет, ваза и цена собираются сами. Красная роза — настоящая модель с вашей фотографии.</p>
     </div>
+    <div id="presetbox">
+      <div class="group-title"><span class="label">Готовый букет</span><span class="label" style="letter-spacing:0;text-transform:none;font-weight:400">в один клик</span></div>
+      <div id="presets">
+        <button data-preset="roman">Романтичный</button>
+        <button data-preset="minimal">Минимал</button>
+        <button data-preset="lush">Пышный</button>
+        <button data-preset="green">Эко-зелень</button>
+      </div>
+    </div>
     <div id="vasebox">
       <div class="group-title"><span class="label">Ваза</span><span class="label" style="letter-spacing:0;text-transform:none;font-weight:400">модели с фото</span></div>
       <div id="vaselist"></div>
@@ -202,6 +211,21 @@
   }
 
   // --- кнопки сцены ---
+  // Пресеты — готовые наборы в один клик.
+  const PRESETS = {
+    roman:   {peo:5, red:3, eus:3, gyp:4, euc:3},
+    minimal: {red:5, euc:4},
+    lush:    {peo:6, gros:4, ran:4, hyd:2, gyp:5, euc:5, rus:3},
+    green:   {euc:6, rus:4, pis:3, gros:3, gyp:4},
+  };
+  document.getElementById('presets').addEventListener('click', (e) => {
+    const key = e.target.dataset.preset; if (!key || !PRESETS[key]) return;
+    for (const k in state.cart) delete state.cart[k];
+    Object.assign(state.cart, PRESETS[key]);
+    [...document.querySelectorAll('#presets button')].forEach(b => b.classList.toggle('on', b===e.target));
+    ui.drawAll(); rebuild(false);
+  });
+
   document.getElementById('variant').addEventListener('click', () => { state.variantSeed++; rebuild(); });
   document.getElementById('relayout').addEventListener('click', () => rebuild());   // вернуть авто-раскладку
   document.getElementById('reset').addEventListener('click', () => cam.frame(FOCUS, FIT, false));

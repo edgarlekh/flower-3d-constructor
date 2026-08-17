@@ -36,6 +36,15 @@ body{
   border-right:1px solid var(--line);
   display:flex;flex-direction:column;min-height:0;background:var(--panel);
 }
+#presetbox{flex:none;border-bottom:1px solid var(--line);padding-bottom:12px}
+#presets{display:flex;flex-wrap:wrap;gap:7px;padding:0 16px}
+#presets button{
+  border:1px solid var(--line);background:transparent;color:var(--text);
+  border-radius:999px;padding:7px 13px;font-size:12.5px;cursor:pointer;font-family:inherit;
+  transition:border-color .12s,color .12s,background .12s;
+}
+#presets button:hover{border-color:var(--rose);color:var(--rose)}
+#presets button.on{border-color:var(--rose);background:rgba(227,162,172,.16);color:var(--rose);font-weight:600}
 #vasebox{flex:none;border-bottom:1px solid var(--line);padding-bottom:6px}
 .head{padding:16px 16px 12px;border-bottom:1px solid var(--line)}
 .head h1{font-size:19px;font-weight:500;letter-spacing:-.01em;margin-top:5px}
