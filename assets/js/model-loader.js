@@ -1,17 +1,25 @@
 /* ============================================================
    ЗАГРУЗЧИК МОДЕЛЕЙ
-   Распаковывает компактный JSON (window.VASE_MODELS, window.ROSE_MODEL)
-   обратно в геометрию three.js и собирает меши бутонов.
+   Распаковывает компактный JSON (упакованный из GLB пайплайном
+   scripts/pack-model.py) обратно в геометрию three.js и собирает
+   меши бутонов.
 
-   Настоящие модели с фотографий пропущены через TRELLIS 2. Цвет розы
-   снят с исходной текстуры и уложен прямо в вершины — поэтому текстура
-   ей не нужна. Вазы несут текстуру; для неё обязательно flipY=false,
-   иначе развёртка ложится зеркально (glTF: V идёт сверху вниз).
+   Форматы упаковки:
+     • vertex-colors — цвет снят с текстуры и уложен в вершины
+       (поле .c). Текстура не нужна. Так упакована роза с фото.
+     • textured — модель с текстурой (поля .u + .t). Для неё
+       обязательно flipY=false, иначе развёртка зеркальная
+       (glTF: V идёт сверху вниз). Так упакованы вазы.
+
+   Реестры моделей (наполняются файлами из assets/catalog/models/):
+     window.VASE_MODELS   — вазы   (ключ = id модели)
+     window.FLOWER_MODELS — цветы  (ключ = id модели)
+     window.ROSE_MODEL    — легаси: роза, регистрируется под ключом 'rose'
 
    Наружу отдаёт window.ModelLoader:
-     vaseAssets   — { ключ: {geo, mat, neck, w} }
-     roseGeo/roseMat
-     bloomMesh(item, rnd) — готовый THREE-объект бутона по позиции каталога
+     vaseAssets            — { ключ: {geo, mat, neck, w} }
+     flowerAssets          — { ключ: {geo, mat} }
+     bloomMesh(item, rnd)  — готовый THREE-объект бутона по позиции каталога
    ============================================================ */
 window.ModelLoader = (function(){
   const bytes = s => {
@@ -20,62 +28,80 @@ window.ModelLoader = (function(){
     return u;
   };
 
-  /* ---------- вазы: геометрия + текстура ---------- */
+  /* Общая распаковка геометрии из компактного JSON.
+     Возвращает {geo, textured}. Позиции/нормали/индекс всегда;
+     uv — если текстурная модель; цвет в вершинах — если .c. */
+  function buildGeometry(R){
+    const P = new Uint16Array(bytes(R.p).buffer),
+          Nq = new Int8Array(bytes(R.n).buffer),
+          I = R.i32 ? new Uint32Array(bytes(R.i).buffer) : new Uint16Array(bytes(R.i).buffer);
+    const pos = new Float32Array(R.nv*3), nrm = new Float32Array(R.nv*3);
+    for (let v = 0; v < R.nv; v++) for (let k = 0; k < 3; k++){
+      pos[v*3+k] = R.mn[k] + P[v*3+k]/65535*R.sp[k];
+      nrm[v*3+k] = Nq[v*3+k]/127;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+    g.setAttribute('normal', new THREE.BufferAttribute(nrm,3));
+    g.setIndex(new THREE.BufferAttribute(I,1));
+
+    const textured = !!(R.u && R.t);
+    if (textured){
+      const U = new Uint16Array(bytes(R.u).buffer);
+      const uv = new Float32Array(R.nv*2);
+      for (let v = 0; v < R.nv; v++){ uv[v*2] = U[v*2]/65535; uv[v*2+1] = U[v*2+1]/65535; }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv,2));
+      g.computeVertexNormals();                    // текстурные модели: гладкие нормали
+    }
+    if (R.c){
+      const C8 = bytes(R.c);
+      const col = new Float32Array(R.nv*3);
+      for (let i = 0; i < R.nv*3; i++) col[i] = Math.pow(C8[i]/255, 2.2);   // в линейное пространство
+      g.setAttribute('color', new THREE.BufferAttribute(col,3));
+    }
+    return { geo:g, textured };
+  }
+
+  // Текстура из base64/data-URI. flipY=false — критично для glTF-развёртки.
+  function makeTexture(src){
+    const img = new Image(), t = new THREE.Texture(img);
+    t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+    t.flipY = false;
+    t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter;
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    img.onload = () => { t.needsUpdate = true; }; img.src = src;
+    return t;
+  }
+
+  /* ---------- вазы: текстурные, несут пропорции neck/w ---------- */
   const vaseAssets = {};
   (function(){
     const D = window.VASE_MODELS; if (!D) return;
     for (const key in D){
       const R = D[key];
-      const P = new Uint16Array(bytes(R.p).buffer),
-            U = new Uint16Array(bytes(R.u).buffer),
-            Nq = new Int8Array(bytes(R.n).buffer),
-            I = R.i32 ? new Uint32Array(bytes(R.i).buffer) : new Uint16Array(bytes(R.i).buffer);
-      const pos = new Float32Array(R.nv*3), uv = new Float32Array(R.nv*2), nrm = new Float32Array(R.nv*3);
-      for (let v = 0; v < R.nv; v++){
-        for (let k = 0; k < 3; k++){
-          pos[v*3+k] = R.mn[k] + P[v*3+k]/65535*R.sp[k];
-          nrm[v*3+k] = Nq[v*3+k]/127;
-        }
-        uv[v*2] = U[v*2]/65535; uv[v*2+1] = U[v*2+1]/65535;
-      }
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(pos,3));
-      g.setAttribute('normal', new THREE.BufferAttribute(nrm,3));
-      g.setAttribute('uv', new THREE.BufferAttribute(uv,2));
-      g.setIndex(new THREE.BufferAttribute(I,1));
-      g.computeVertexNormals();
-      const img = new Image(); const t = new THREE.Texture(img);
-      t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
-      t.flipY = false;                                   // glTF: V идёт сверху вниз
-      t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter;
-      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-      img.onload = () => { t.needsUpdate = true; }; img.src = R.t;
+      const { geo } = buildGeometry(R);
       vaseAssets[key] = {
-        geo: g,
-        mat: new THREE.MeshStandardMaterial({map:t, roughness:.35, metalness:0, side:THREE.FrontSide}),
+        geo,
+        mat: new THREE.MeshStandardMaterial({map:makeTexture(R.t), roughness:.35, metalness:0, side:THREE.FrontSide}),
         neck: R.neck, w: R.w
       };
     }
   })();
 
-  /* ---------- роза: цвет в вершинах ---------- */
-  let roseGeo = null, roseMat = null;
+  /* ---------- цветы: vertex-color или текстурные ---------- */
+  const flowerAssets = {};
+  function registerFlower(key, R){
+    if (!R) return;
+    const { geo, textured } = buildGeometry(R);
+    const mat = textured
+      ? new THREE.MeshStandardMaterial({map:makeTexture(R.t), roughness:.6, metalness:0, side:THREE.DoubleSide})
+      : new THREE.MeshStandardMaterial({vertexColors:true, roughness:.68, metalness:0, side:THREE.DoubleSide});
+    flowerAssets[key] = { geo, mat };
+  }
   (function(){
-    const R = window.ROSE_MODEL; if (!R) return;
-    const P = new Uint16Array(bytes(R.p).buffer), C8 = bytes(R.c),
-          Nq = new Int8Array(bytes(R.n).buffer), I = new Uint16Array(bytes(R.i).buffer);
-    const pos = new Float32Array(R.nv*3), col = new Float32Array(R.nv*3), nrm = new Float32Array(R.nv*3);
-    for (let i = 0; i < R.nv; i++) for (let k = 0; k < 3; k++){
-      pos[i*3+k] = R.mn[k] + P[i*3+k]/65535*R.sp[k];
-      nrm[i*3+k] = Nq[i*3+k]/127;
-      col[i*3+k] = Math.pow(C8[i*3+k]/255, 2.2);         // в линейное пространство
-    }
-    roseGeo = new THREE.BufferGeometry();
-    roseGeo.setAttribute('position', new THREE.BufferAttribute(pos,3));
-    roseGeo.setAttribute('normal', new THREE.BufferAttribute(nrm,3));
-    roseGeo.setAttribute('color', new THREE.BufferAttribute(col,3));
-    roseGeo.setIndex(new THREE.BufferAttribute(I,1));
-    roseMat = new THREE.MeshStandardMaterial({vertexColors:true, roughness:.68, metalness:0, side:THREE.DoubleSide});
+    if (window.ROSE_MODEL) registerFlower('rose', window.ROSE_MODEL);   // легаси-роза
+    const D = window.FLOWER_MODELS;
+    if (D) for (const key in D) registerFlower(key, D[key]);
   })();
 
   /* ---------- процедурные бутоны (кэш материалов) ---------- */
@@ -86,12 +112,21 @@ window.ModelLoader = (function(){
     return matCache[k];
   }
 
+  // Какой ключ реальной модели у позиции каталога (или null).
+  function flowerKey(item){
+    if (!item.model) return null;
+    const key = item.model === true ? 'rose' : item.model;   // model:true — легаси-роза
+    return flowerAssets[key] ? key : null;
+  }
+
   /* Собирает объект бутона по позиции каталога.
-     Красная роза — настоящая модель, остальное — процедурные формы. */
+     Есть реальная модель — берём её, иначе процедурная форма. */
   function bloomMesh(item, rnd){
-    if (item.model && roseGeo){
+    const key = flowerKey(item);
+    if (key){
+      const a = flowerAssets[key];
       const g = new THREE.Group();
-      const m = new THREE.Mesh(roseGeo, roseMat);
+      const m = new THREE.Mesh(a.geo, a.mat);
       m.scale.setScalar(item.bloom_cm);
       m.position.y = -item.bloom_cm*0.14;
       m.rotation.y = rnd()*6.283;
@@ -129,5 +164,5 @@ window.ModelLoader = (function(){
     return g;
   }
 
-  return { vaseAssets, get roseGeo(){return roseGeo;}, get roseMat(){return roseMat;}, mat, bloomMesh };
+  return { vaseAssets, flowerAssets, bloomMesh };
 })();
