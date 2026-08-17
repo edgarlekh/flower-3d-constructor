@@ -94,6 +94,14 @@
   <button data-act="edit">✎ Изменить в конструкторе</button>
   <button data-act="del" class="del">🗑 Удалить</button>
 </div>
+<div id="tablemenu">
+  <div class="tm-title" id="tm-title">Стол</div>
+  <div class="tm-guests">Гостей<span class="sp"></span><button data-act="g-">−</button><b id="tm-seats">8</b><button data-act="g+">+</button></div>
+  <button data-act="rotate">↻ Повернуть 45°</button>
+  <button data-act="rename">✎ Переименовать</button>
+  <button data-act="copy">⧉ Копия стола</button>
+  <button data-act="del" class="del">🗑 Удалить стол</button>
+</div>
 <div id="loader" class="scene-loader"><div class="spin"></div>Накрываем столы…</div>
 
 <script src="assets/js/three.min.js"></script>
@@ -215,7 +223,7 @@
     tables.forEach((t,i)=>{
       const el=numsWrap.children[i]; const s=projScreen(new THREE.Vector3(t.position.x, TABLE_H+52, t.position.z));
       el.style.display='block'; el.style.left=s.x+'px'; el.style.top=s.y+'px';
-      el.textContent=(i+1); el.classList.toggle('sel', t===selected);
+      el.textContent = t.userData.name ? t.userData.name : (i+1); el.classList.toggle('sel', t===selected);
     });
   }
 
@@ -233,8 +241,8 @@
     }
     const lx=obj.position.x, lz=obj.position.z, fp=obj.userData.footprint||6;
     // до края стола (по форме)
-    const ei=edgeInfo(t,lx,lz), edge=Math.round(ei.dist-fp);
-    dims.push({a:wa.clone(), b:new THREE.Vector3(t.position.x+ei.ex, wa.y, t.position.z+ei.ez), text:`до края: ${edge} см`, warn:edge<0});
+    const ei=edgeInfo(t,lx,lz), edge=Math.round(ei.dist-fp), [ewx,ewz]=localToWorld(t, ei.ex, ei.ez);
+    dims.push({a:wa.clone(), b:new THREE.Vector3(ewx, wa.y, ewz), text:`до края: ${edge} см`, warn:edge<0});
     // до ближайшей тарелки
     const sets=t.userData.settings.children.filter(c=>c.userData.kind==='setting');
     let bd=Infinity,bs=null; sets.forEach(s=>{ const d=Math.hypot(lx-s.position.x,lz-s.position.z); if(d<bd){bd=d;bs=s;} });
@@ -255,8 +263,9 @@
   function updatePanel(){
     const t = selected;
     const sz = t ? (isRect(t) ? `${t.userData.hl*2}×${t.userData.hw*2} см` : `⌀ ${tR(t)*2} см`) : '';
+    const label = t ? (t.userData.name || ('Стол №'+(tables.indexOf(t)+1))) : '';
     document.getElementById('p-table').innerHTML = t
-      ? `<div class="ptitle">Стол №${tables.indexOf(t)+1}</div><div class="pbig">${sz} · ${t.userData.seats} гост.</div>`
+      ? `<div class="ptitle">${label}</div><div class="pbig">${sz} · ${t.userData.seats} гост.</div>`
       : '<div class="pmuted">Стол не выбран</div>';
     // зазоры
     let gaps = '';
@@ -362,6 +371,9 @@
   function tableReach(t){ return isRect(t) ? Math.hypot(t.userData.hl, t.userData.hw)+43 : tR(t)+43; }
   // Свободная длина периметра под стулья.
   function seatPerimeter(t){ return isRect(t) ? 4*t.userData.hl : 2*Math.PI*(tR(t)+22); }
+  // Мир↔локаль с учётом поворота стола (rotation.y).
+  function localToWorld(t,lx,lz){ const a=t.rotation.y,c=Math.cos(a),s=Math.sin(a); return [t.position.x + c*lx + s*lz, t.position.z - s*lx + c*lz]; }
+  function worldToLocal(t,wx,wz){ const a=t.rotation.y,c=Math.cos(a),s=Math.sin(a),dx=wx-t.position.x,dz=wz-t.position.z; return [c*dx - s*dz, s*dx + c*dz]; }
 
   // --- камера ---
   let FOCUS = new THREE.Vector3(0, TABLE_H, 0), FIT = 400;
@@ -436,8 +448,9 @@
   function createTable(data){
     const t = new THREE.Group();
     t.position.set(data.x||0, 0, data.z||0);
+    t.rotation.y = data.rot || 0;
     const shape = data.shape==='rect' ? 'rect' : 'round';
-    t.userData = { kind:'table', shape, seats: data.seats||SEATS_DEFAULT };
+    t.userData = { kind:'table', shape, seats: data.seats||SEATS_DEFAULT, name: data.name||'' };
     if (shape==='rect'){
       const hl=t.userData.hl = data.hl||RECT_HL, hw=t.userData.hw = data.hw||RECT_HW;
       // скатерть-короб (драпировка до пола) — она же ручка перетаскивания
@@ -468,6 +481,7 @@
     return {
       x:+t.position.x.toFixed(1), z:+t.position.z.toFixed(1), seats:t.userData.seats,
       shape:t.userData.shape, hl:t.userData.hl, hw:t.userData.hw, R:t.userData.R,
+      rot:+t.rotation.y.toFixed(3), name:t.userData.name||'',
       bouquets: t.userData.bouquets.children.map(b=>({ spec:b.userData.spec, x:+b.position.x.toFixed(1), z:+b.position.z.toFixed(1) })),
       settings: t.userData.settings.children.filter(c=>c.userData.kind==='setting')
                  .map(s=>({ x:+s.position.x.toFixed(1), z:+s.position.z.toFixed(1), rot:+s.rotation.y.toFixed(3) })),
@@ -534,8 +548,8 @@
       if(sx!=null){ x=sx; showGuide(guideX,false,sx); } if(sz!=null){ z=sz; showGuide(guideZ,true,sz); }
       t.position.x=x; t.position.z=z; selRing.position.set(x,0.6,z);
     } else {
-      // букет/прибор: свободно тянем в мировых координатах (можно на другой стол)
-      let lx=p.x - t.position.x, lz=p.z - t.position.z;
+      // букет/прибор: свободно тянем (учитываем поворот стола)
+      let [lx,lz]=worldToLocal(t, p.x, p.z);
       if (obj.userData.kind==='setting'){ [lx,lz]=clampItem(t,lx,lz); }
       else { if(Math.hypot(lx,lz)<12){ lx=0; lz=0; } }   // букет ловится в центр, без жёсткого клэмпа
       obj.position.x=lx; obj.position.z=lz;
@@ -573,9 +587,14 @@
     cnd.x=((e.clientX-r.left)/r.width)*2-1; cnd.y=-((e.clientY-r.top)/r.height)*2+1;
     crc.setFromCamera(cnd, camera);
     const hits=crc.intersectObjects(pickables(), true);
-    // среди попаданий предпочитаем букет (скатерть может быть спереди)
-    let bq=null; for(const h of hits){ let o=h.object; while(o && !(o.userData&&o.userData.table)) o=o.parent; if(o && o.userData.kind==='bouquet'){ bq=o; break; } }
-    if(bq){ selectTable(bq.userData.table); openBouquetMenu(bq, e); } else closeMenu();
+    // предпочитаем букет; иначе — стол (для его меню)
+    let bq=null, tbl=null;
+    for(const h of hits){ let o=h.object; while(o && !(o.userData&&o.userData.table)) o=o.parent;
+      if(o && o.userData.kind==='bouquet'){ bq=o; break; }
+      if(o && !tbl) tbl=o.userData.table; }
+    if(bq){ selectTable(bq.userData.table); openBouquetMenu(bq, e); }
+    else if(tbl){ openTableMenu(tbl, e); }
+    else closeMenu();
   });
 
   // Меню по клику на букет: дублировать / изменить / удалить.
@@ -586,7 +605,28 @@
     m.style.left=Math.min(x, innerWidth-210)+'px'; m.style.top=Math.min(y, innerHeight-150)+'px';
     m.classList.add('show');
   }
-  function closeMenu(){ document.getElementById('objmenu').classList.remove('show'); menuTarget=null; }
+  function closeMenu(){ document.getElementById('objmenu').classList.remove('show'); document.getElementById('tablemenu').classList.remove('show'); menuTarget=null; menuTable=null; }
+
+  // Меню по правому клику на стол.
+  let menuTable=null;
+  function openTableMenu(t, e){
+    menuTable=t; selectTable(t); const m=document.getElementById('tablemenu');
+    document.getElementById('tm-title').textContent = t.userData.name ? t.userData.name : ('Стол №'+(tables.indexOf(t)+1));
+    document.getElementById('tm-seats').textContent = t.userData.seats;
+    const x=(e&&e.clientX)||200, y=(e&&e.clientY)||200;
+    m.style.left=Math.min(x, innerWidth-220)+'px'; m.style.top=Math.min(y, innerHeight-230)+'px';
+    document.getElementById('objmenu').classList.remove('show'); m.classList.add('show');
+  }
+  document.getElementById('tablemenu').addEventListener('click', (e)=>{
+    const act=e.target.dataset.act; if(!act||!menuTable) return; const t=menuTable;
+    if(act==='rotate'){ pushHistory(); t.rotation.y += Math.PI/4; selectTable(t); saveHall(); }
+    else if(act==='g-'){ pushHistory(); t.userData.seats=Math.max(2,t.userData.seats-1); buildSettings(t); document.getElementById('tm-seats').textContent=t.userData.seats; afterChange(false); return; }
+    else if(act==='g+'){ pushHistory(); t.userData.seats=Math.min(20,t.userData.seats+1); buildSettings(t); document.getElementById('tm-seats').textContent=t.userData.seats; afterChange(false); return; }
+    else if(act==='rename'){ const n=prompt('Название стола:', t.userData.name||('Стол №'+(tables.indexOf(t)+1))); if(n!==null){ t.userData.name=n.trim(); afterChange(false); } }
+    else if(act==='copy'){ pushHistory(); const d=tableData(t); const [x,z]=freeSpot(); const nt=createTable(Object.assign({},d,{x,z})); selectTable(nt); afterChange('table'); }
+    else if(act==='del'){ if(tables.length>1){ pushHistory(); scene.remove(t); tables.splice(tables.indexOf(t),1); selectTable(tables[0]); afterChange('all'); } }
+    closeMenu();
+  });
   document.getElementById('objmenu').addEventListener('click', (e)=>{
     const act=e.target.dataset.act; if(!act||!menuTarget) return; const b=menuTarget, t=b.userData.table;
     if(act==='dup'){ pushHistory(); const [x,z]=nextBouquetSpot(t); addBouquet(t, b.userData.spec, x, z); afterChange(false); }
@@ -602,11 +642,11 @@
 
   // Перенос букета на ближайший стол (кросс-таблица).
   function dropBouquetToNearestTable(b){
-    const wx=b.userData.table.position.x + b.position.x, wz=b.userData.table.position.z + b.position.z;
+    const [wx,wz]=localToWorld(b.userData.table, b.position.x, b.position.z);
     let best=Infinity, nt=b.userData.table;
     tables.forEach(t=>{ const d=Math.hypot(wx-t.position.x, wz-t.position.z); if(d<best){ best=d; nt=t; } });
     if(nt!==b.userData.table){ nt.userData.bouquets.add(b); b.userData.table=nt; selectTable(nt); }
-    const [lx,lz]=clampItem(nt, wx-nt.position.x, wz-nt.position.z);
+    const [lx,lz]=clampItem(nt, ...worldToLocal(nt, wx, wz));
     b.position.x=lx; b.position.z=lz;
   }
 
@@ -812,9 +852,9 @@
   function sitAt(t){
     // ближайшее место (стул) по форме стола
     const desc=seatDescriptors(t); let best=Infinity, bc=null;
-    desc.forEach(d=>{ const sx=t.position.x+d.cx, sz=t.position.z+d.cz, dist=Math.hypot(sx-walk.x,sz-walk.z); if(dist<best){best=dist;bc=d;} });
+    desc.forEach(d=>{ const [sx,sz]=localToWorld(t,d.cx,d.cz), dist=Math.hypot(sx-walk.x,sz-walk.z); if(dist<best){best=dist;bc=d;} });
     if(!bc) return;
-    walk.goto={ x:t.position.x+bc.cx*1.06, z:t.position.z+bc.cz*1.06 };
+    const [gx,gz]=localToWorld(t, bc.cx*1.06, bc.cz*1.06); walk.goto={ x:gx, z:gz };
     walk.teye=EYE_SIT; walk.face=new THREE.Vector3(t.position.x, TABLE_H+8, t.position.z);
     selectTable(t);
   }
@@ -840,9 +880,12 @@
     walk.x+=walk.vx; walk.z+=walk.vz;
     if(walk.goto){ walk.x+=(walk.goto.x-walk.x)*0.09; walk.z+=(walk.goto.z-walk.z)*0.09; if(Math.hypot(walk.goto.x-walk.x,walk.goto.z-walk.z)<3) walk.goto=null; }
     // не заходить сквозь столы
-    tables.forEach(t=>{ const dx=walk.x-t.position.x, dz=walk.z-t.position.z;
-      if(isRect(t)){ const hl=t.userData.hl+16, hw=t.userData.hw+16; if(Math.abs(dx)<hl&&Math.abs(dz)<hw){ const ox=hl-Math.abs(dx), oz=hw-Math.abs(dz); if(ox<oz){ walk.x=t.position.x+Math.sign(dx||1)*hl; walk.vx*=0.3; } else { walk.z=t.position.z+Math.sign(dz||1)*hw; walk.vz*=0.3; } } }
-      else { const d=Math.hypot(dx,dz), R=tR(t)+16; if(d<R&&d>0.01){ walk.x=t.position.x+dx/d*R; walk.z=t.position.z+dz/d*R; walk.vx*=0.3; walk.vz*=0.3; } } });
+    tables.forEach(t=>{
+      if(isRect(t)){ let [lx,lz]=worldToLocal(t, walk.x, walk.z); const hl=t.userData.hl+16, hw=t.userData.hw+16;
+        if(Math.abs(lx)<hl&&Math.abs(lz)<hw){ const ox=hl-Math.abs(lx), oz=hw-Math.abs(lz);
+          if(ox<oz) lx=Math.sign(lx||1)*hl; else lz=Math.sign(lz||1)*hw;
+          const [wx,wz]=localToWorld(t,lx,lz); walk.x=wx; walk.z=wz; walk.vx*=0.3; walk.vz*=0.3; } }
+      else { const dx=walk.x-t.position.x, dz=walk.z-t.position.z, d=Math.hypot(dx,dz), R=tR(t)+16; if(d<R&&d>0.01){ walk.x=t.position.x+dx/d*R; walk.z=t.position.z+dz/d*R; walk.vx*=0.3; walk.vz*=0.3; } } });
     // не выходить за стены загруженной комнаты
     if(venueBounds){ const mg=35;
       if(walk.x<venueBounds.minX+mg){walk.x=venueBounds.minX+mg;walk.vx=0;} if(walk.x>venueBounds.maxX-mg){walk.x=venueBounds.maxX-mg;walk.vx=0;}
