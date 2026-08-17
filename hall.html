@@ -46,6 +46,7 @@
       <button id="clear-venue">Убрать зал</button>
     </div>
   </div>
+  <button id="undo-btn">↶ Отменить</button>
   <button id="reset">Показать все</button>
   <button id="walk-btn" class="walk">◆ Пройтись по залу</button>
   <button id="share-btn">🔗 Поделиться с клиентом</button>
@@ -387,6 +388,19 @@
                  .map(s=>({ x:+s.position.x.toFixed(1), z:+s.position.z.toFixed(1), rot:+s.rotation.y.toFixed(3) })),
     };
   }
+
+  // --- отмена (история состояний стола) ---
+  const history = []; let dragSnap = null;
+  const snapshot = () => JSON.stringify(tables.map(tableData));
+  function pushHistory(){ const s=snapshot(); if(history[history.length-1]!==s){ history.push(s); if(history.length>40) history.shift(); } }
+  function pushSnap(s){ if(s && history[history.length-1]!==s){ history.push(s); if(history.length>40) history.shift(); } }
+  function restoreTables(list){
+    tables.slice().forEach(t=>scene.remove(t)); tables.length=0;
+    list.forEach(d=>createTable(d));
+    if(!tables.length) createTable({x:0,z:0,seats:SEATS_DEFAULT,bouquets:[]});
+    selectTable(tables[0]); updateReadout(); renderWarnings(); saveHall();
+  }
+  function undo(){ if(viewOnly || !history.length) return; restoreTables(JSON.parse(history.pop())); showMsg('Отменено'); }
   // Свободное место для нового стола: расширяющиеся кольца, без наложения на существующие.
   function freeSpot(){
     const MIN = 2*CHAIR_OUTER + 45;             // центр-центр с проходом ≥ 45 см
@@ -439,8 +453,12 @@
     canGrab: () => mode==='edit' && !viewOnly,
     setCameraPaused: (v) => cam.setPaused(v),
     moveTo: onMove,
-    onGrab: (o) => { selectTable(o.userData.table); document.getElementById('hint').classList.add('gone'); },
-    onRelease: () => { clearDims(); updateReadout(); saveHall(); renderWarnings(); },
+    onGrab: (o) => { selectTable(o.userData.table);
+      if(o.userData.kind==='bouquet') currentSpec = o.userData.spec;   // тронутый букет становится «текущим» для копии
+      dragSnap = snapshot();                                           // снимок до перетаскивания (для отмены)
+      document.getElementById('hint').classList.add('gone'); },
+    onRelease: () => { if(dragSnap && dragSnap!==snapshot()) pushSnap(dragSnap); dragSnap=null;   // записываем в историю только реальное перемещение
+      clearDims(); updateReadout(); saveHall(); renderWarnings(); },
   });
 
   // Двойной клик по столу — камера подлетает к нему (легко переходить между столами).
@@ -503,27 +521,30 @@
     if(frame==='all') frameAll(); else if(frame==='table' && selected) frameTable(selected); }
 
   document.getElementById('add-table').addEventListener('click', () => {
+    pushHistory();
     const [x,z]=freeSpot(); const t=createTable({x,z,seats:SEATS_DEFAULT,bouquets:[{spec:currentSpec,x:0,z:0}]});
     selectTable(t); afterChange('table');        // подлетаем к новому столу
   });
   document.getElementById('copy-table').addEventListener('click', () => {
-    if(!selected) return; const d=tableData(selected); const [x,z]=freeSpot();
+    if(!selected) return; pushHistory(); const d=tableData(selected); const [x,z]=freeSpot();
     const t=createTable(Object.assign({}, d, {x,z})); selectTable(t); afterChange('table');
   });
   document.getElementById('del-table').addEventListener('click', () => {
-    if(!selected || tables.length<=1) return;
+    if(!selected || tables.length<=1) return; pushHistory();
     scene.remove(selected); tables.splice(tables.indexOf(selected),1);
     selectTable(tables[0]); afterChange('all');
   });
   document.getElementById('add').addEventListener('click', () => {
-    if(!selected) return; const [x,z]=nextBouquetSpot(selected); addBouquet(selected, currentSpec, x, z); afterChange(false);
+    if(!selected) return; pushHistory(); const [x,z]=nextBouquetSpot(selected); addBouquet(selected, currentSpec, x, z); afterChange(false);
   });
   document.getElementById('remove').addEventListener('click', () => {
-    if(!selected) return; const bg=selected.userData.bouquets; if(bg.children.length) bg.remove(bg.children[bg.children.length-1]); afterChange(false);
+    if(!selected) return; pushHistory(); const bg=selected.userData.bouquets; if(bg.children.length) bg.remove(bg.children[bg.children.length-1]); afterChange(false);
   });
-  document.getElementById('g-minus').addEventListener('click', () => { if(selected){ selected.userData.seats=Math.max(2,selected.userData.seats-1); buildSettings(selected); afterChange(false);} });
-  document.getElementById('g-plus').addEventListener('click',  () => { if(selected){ selected.userData.seats=Math.min(14,selected.userData.seats+1); buildSettings(selected); afterChange(false);} });
+  document.getElementById('g-minus').addEventListener('click', () => { if(selected){ pushHistory(); selected.userData.seats=Math.max(2,selected.userData.seats-1); buildSettings(selected); afterChange(false);} });
+  document.getElementById('g-plus').addEventListener('click',  () => { if(selected){ pushHistory(); selected.userData.seats=Math.min(14,selected.userData.seats+1); buildSettings(selected); afterChange(false);} });
+  document.getElementById('undo-btn').addEventListener('click', () => undo());
   document.getElementById('reset').addEventListener('click', () => frameAll());
+  addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z' && mode==='edit'){ e.preventDefault(); undo(); } });
   document.getElementById('cloth-colors').addEventListener('click', (e) => {
     const hex=e.target.dataset.cloth; if(!hex) return;
     clothMat.color.setHex(parseInt(hex,16));
