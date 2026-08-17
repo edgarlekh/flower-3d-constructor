@@ -79,6 +79,13 @@
 
 <div id="dims"></div>
 <div id="tablenums"></div>
+<div id="guestnames"></div>
+
+<div id="seating">
+  <div class="sh"><span id="seat-title">Рассадка</span><button id="seat-close">✕</button></div>
+  <div id="seat-list"></div>
+  <div class="sf"><button id="seat-print">🖨 Печать рассадки</button></div>
+</div>
 
 <div id="empty" style="display:none">
   <div>
@@ -97,6 +104,7 @@
 <div id="tablemenu">
   <div class="tm-title" id="tm-title">Стол</div>
   <div class="tm-guests">Гостей<span class="sp"></span><button data-act="g-">−</button><b id="tm-seats">8</b><button data-act="g+">+</button></div>
+  <button data-act="seat">🪑 Рассадка гостей</button>
   <button data-act="rotate">↻ Повернуть 45°</button>
   <button data-act="rename">✎ Переименовать</button>
   <button data-act="copy">⧉ Копия стола</button>
@@ -225,6 +233,47 @@
       el.style.display='block'; el.style.left=s.x+'px'; el.style.top=s.y+'px';
       el.textContent = t.userData.name ? t.userData.name : (i+1); el.classList.toggle('sel', t===selected);
     });
+  }
+
+  // имена гостей над стульями
+  const guestWrap = document.getElementById('guestnames');
+  function updateGuestNames(){
+    if(mode==='walk'){ [...guestWrap.children].forEach(el=>el.style.display='none'); return; }
+    const items=[];
+    tables.forEach(t=>{ const g=t.userData.guests||[];
+      t.userData.settings.children.forEach(c=>{ if(c.userData.kind==='chair'){ const nm=g[c.userData.seatIdx]; if(nm){ const [wx,wz]=localToWorld(t,c.position.x,c.position.z); items.push({wx,wz,nm}); } } }); });
+    while(guestWrap.children.length<items.length){ const el=document.createElement('div'); el.className='guestname'; guestWrap.appendChild(el); }
+    while(guestWrap.children.length>items.length){ guestWrap.removeChild(guestWrap.lastChild); }
+    items.forEach((it,i)=>{ const el=guestWrap.children[i], s=projScreen(new THREE.Vector3(it.wx,95,it.wz));
+      el.style.display='block'; el.style.left=s.x+'px'; el.style.top=s.y+'px'; el.textContent=it.nm; });
+  }
+
+  // редактор рассадки (по столу)
+  let seatTable=null;
+  function openSeating(t){
+    seatTable=t; selectTable(t);
+    document.getElementById('seat-title').textContent = 'Рассадка · ' + (t.userData.name||('Стол №'+(tables.indexOf(t)+1)));
+    const g=t.userData.guests||(t.userData.guests=[]);
+    let html='';
+    for(let i=0;i<t.userData.seats;i++) html += `<label class="seatrow"><span>Место ${i+1}</span><input data-seat="${i}" value="${(g[i]||'').replace(/"/g,'&quot;')}" placeholder="имя гостя"></label>`;
+    document.getElementById('seat-list').innerHTML=html;
+    document.getElementById('seating').classList.add('show');
+  }
+  document.getElementById('seat-list').addEventListener('input', (e)=>{
+    const i=e.target.dataset.seat; if(i==null||!seatTable) return;
+    const g=seatTable.userData.guests||(seatTable.userData.guests=[]); g[+i]=e.target.value; saveHall();
+  });
+  document.getElementById('seat-close').addEventListener('click', ()=>{ document.getElementById('seating').classList.remove('show'); seatTable=null; });
+  document.getElementById('seat-print').addEventListener('click', ()=> printSeating());
+  function printSeating(){
+    let html='<html><head><meta charset="utf-8"><title>Рассадка</title><style>body{font-family:Georgia,serif;padding:40px;color:#2a2622}h1{font-size:24px}h2{font-size:17px;margin:18px 0 6px;border-bottom:1px solid #ccc;padding-bottom:4px}ol{margin:0 0 12px 0}li{padding:2px 0}.empty{color:#999}</style></head><body>';
+    html+='<h1>Схема рассадки</h1>';
+    tables.forEach((t,ti)=>{ const nm=t.userData.name||('Стол №'+(ti+1)); const g=t.userData.guests||[];
+      html+=`<h2>${nm} — ${t.userData.seats} мест</h2><ol>`;
+      for(let i=0;i<t.userData.seats;i++) html+=`<li>${g[i]?g[i]:'<span class="empty">—</span>'}</li>`;
+      html+='</ol>'; });
+    html+='</body></html>';
+    const w=window.open('','_blank'); if(w){ w.document.write(html); w.document.close(); w.print(); }
   }
 
   // Какие размеры показать для перетаскиваемого объекта.
@@ -415,7 +464,8 @@
     const desc = seatDescriptors(t);
     const use = (saved && saved.length === seats) ? saved : null;
     desc.forEach((d,i)=>{
-      const ch = chairMesh(); ch.position.set(d.cx,0,d.cz); ch.rotation.y=d.crot; sg.add(ch);
+      const ch = chairMesh(); ch.position.set(d.cx,0,d.cz); ch.rotation.y=d.crot;
+      ch.userData={ kind:'chair', seatIdx:i, table:t }; sg.add(ch);
       const s = settingMesh();
       if (use){ s.position.set(use[i].x, TABLE_TOP, use[i].z); s.rotation.y = use[i].rot; }
       else { s.position.set(d.px, TABLE_TOP, d.pz); s.rotation.y = d.srot; }
@@ -450,7 +500,7 @@
     t.position.set(data.x||0, 0, data.z||0);
     t.rotation.y = data.rot || 0;
     const shape = data.shape==='rect' ? 'rect' : 'round';
-    t.userData = { kind:'table', shape, seats: data.seats||SEATS_DEFAULT, name: data.name||'' };
+    t.userData = { kind:'table', shape, seats: data.seats||SEATS_DEFAULT, name: data.name||'', guests: Array.isArray(data.guests)?data.guests.slice():[] };
     if (shape==='rect'){
       const hl=t.userData.hl = data.hl||RECT_HL, hw=t.userData.hw = data.hw||RECT_HW;
       // скатерть-короб (драпировка до пола) — она же ручка перетаскивания
@@ -481,7 +531,7 @@
     return {
       x:+t.position.x.toFixed(1), z:+t.position.z.toFixed(1), seats:t.userData.seats,
       shape:t.userData.shape, hl:t.userData.hl, hw:t.userData.hw, R:t.userData.R,
-      rot:+t.rotation.y.toFixed(3), name:t.userData.name||'',
+      rot:+t.rotation.y.toFixed(3), name:t.userData.name||'', guests:(t.userData.guests||[]).slice(0,t.userData.seats),
       bouquets: t.userData.bouquets.children.map(b=>({ spec:b.userData.spec, x:+b.position.x.toFixed(1), z:+b.position.z.toFixed(1) })),
       settings: t.userData.settings.children.filter(c=>c.userData.kind==='setting')
                  .map(s=>({ x:+s.position.x.toFixed(1), z:+s.position.z.toFixed(1), rot:+s.rotation.y.toFixed(3) })),
@@ -619,7 +669,8 @@
   }
   document.getElementById('tablemenu').addEventListener('click', (e)=>{
     const act=e.target.dataset.act; if(!act||!menuTable) return; const t=menuTable;
-    if(act==='rotate'){ pushHistory(); t.rotation.y += Math.PI/4; selectTable(t); saveHall(); }
+    if(act==='seat'){ closeMenu(); openSeating(t); return; }
+    else if(act==='rotate'){ pushHistory(); t.rotation.y += Math.PI/4; selectTable(t); saveHall(); }
     else if(act==='g-'){ pushHistory(); t.userData.seats=Math.max(2,t.userData.seats-1); buildSettings(t); document.getElementById('tm-seats').textContent=t.userData.seats; afterChange(false); return; }
     else if(act==='g+'){ pushHistory(); t.userData.seats=Math.min(20,t.userData.seats+1); buildSettings(t); document.getElementById('tm-seats').textContent=t.userData.seats; afterChange(false); return; }
     else if(act==='rename'){ const n=prompt('Название стола:', t.userData.name||('Стол №'+(tables.indexOf(t)+1))); if(n!==null){ t.userData.name=n.trim(); afterChange(false); } }
@@ -932,6 +983,7 @@
     if (mode==='walk') updateWalk(); else cam.updateInertia();
     renderer.render(scene, camera);
     updateTableNums();
+    updateGuestNames();
   }
 
   // --- старт: ссылка-просмотр (#v=...) имеет приоритет, иначе — своя расстановка ---
@@ -975,7 +1027,7 @@
 
   window.hallDebug = { scene, camera, cam, tables, get selected(){return selected;}, createTable, addBouquet, computeWarnings, drag, TABLE_R, TABLE_H, pickables,
     enterWalk, exitWalk, sitAt, updateWalk, walk, keys, get mode(){return mode;},
-    dropBouquetToNearestTable, openBouquetMenu };
+    dropBouquetToNearestTable, openBouquetMenu, openSeating, updateGuestNames };
 })();
 </script>
 </body>

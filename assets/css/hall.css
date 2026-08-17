@@ -225,6 +225,29 @@ body.view-only #topbar,body.view-only #panel,body.view-only #tools .tgroup,body.
   font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;box-shadow:0 3px 10px rgba(60,45,35,.16);
 }
 #tablenums .tablenum.sel{background:var(--accent);color:#fff;border-color:transparent}
+/* имена гостей над стульями */
+#guestnames .guestname{
+  position:fixed;z-index:2;transform:translate(-50%,-50%);pointer-events:none;
+  background:rgba(58,53,47,.9);color:#fff;font-size:11px;font-weight:600;white-space:nowrap;
+  padding:2px 7px;border-radius:999px;box-shadow:0 2px 6px rgba(0,0,0,.25);max-width:120px;overflow:hidden;text-overflow:ellipsis;
+}
+/* редактор рассадки */
+#seating{
+  position:fixed;left:50%;top:78px;transform:translateX(-50%);z-index:7;width:280px;display:none;flex-direction:column;
+  background:var(--ui);backdrop-filter:blur(12px);border:1px solid var(--ui-line);border-radius:15px;box-shadow:var(--ui-shadow);color:var(--ui-text);
+}
+#seating.show{display:flex}
+#seating .sh{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid var(--ui-line);font-weight:700;font-size:13px}
+#seating .sh button{border:none;background:transparent;color:var(--ui-muted);cursor:pointer;font-size:15px}
+#seating .sh button:hover{color:var(--accent)}
+#seat-list{padding:8px 12px;max-height:56vh;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.seatrow{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.seatrow span{color:var(--ui-muted);min-width:64px}
+.seatrow input{flex:1;border:1px solid var(--ui-line);border-radius:8px;padding:6px 9px;font-size:13px;font-family:inherit;color:var(--ui-text);background:#fff}
+.seatrow input:focus{outline:none;border-color:var(--accent)}
+#seating .sf{padding:10px 12px;border-top:1px solid var(--ui-line)}
+#seating .sf button{width:100%;border:1px solid transparent;background:var(--accent);color:#fff;border-radius:10px;padding:9px;font-size:13px;font-weight:600;cursor:pointer}
+#seating .sf button:hover{background:var(--accent-deep)}
 
 /* подсказка — тонкая пилюля по центру */
 #hint{
