@@ -116,6 +116,14 @@ body.walk-mode #tools,body.walk-mode #panel,body.walk-mode #hint,body.walk-mode 
 }
 #fade.on{opacity:1}
 
+/* уведомление загрузки зала */
+#venue-msg{
+  position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:7;
+  background:#3a352f;color:#fff;font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;
+  box-shadow:0 6px 18px rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .3s;white-space:nowrap;
+}
+#venue-msg.show{opacity:1}
+
 /* левая панель: стол · размеры · внимание (сворачиваемая) */
 #panel{
   position:fixed;left:12px;top:74px;z-index:3;width:238px;color:var(--ui-text);

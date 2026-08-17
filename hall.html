@@ -29,9 +29,16 @@
     <button id="add" class="primary">+ Копия букета</button>
     <button id="remove">Убрать букет</button>
   </div>
+  <div class="tgroup">
+    <span class="tlabel">Помещение</span>
+    <button id="load-venue">⤓ Загрузить зал (GLB)</button>
+    <button id="clear-venue" style="display:none">Убрать зал</button>
+  </div>
   <button id="reset">Показать все</button>
   <button id="walk-btn" class="walk">◆ Пройтись по залу</button>
 </div>
+<input id="venue-file" type="file" accept=".glb,.gltf" style="display:none">
+<div id="venue-msg"></div>
 
 <div id="walkbar">
   <span class="wtitle">Вид гостя</span>
@@ -64,6 +71,7 @@
 <div id="loader" class="scene-loader"><div class="spin"></div>Накрываем столы…</div>
 
 <script src="assets/js/three.min.js"></script>
+<script src="assets/js/GLTFLoader.js"></script>
 <script src="assets/catalog/catalog.js"></script>
 <script src="assets/catalog/models/vases.js"></script>
 <script src="assets/catalog/models/rose.js"></script>
@@ -494,6 +502,35 @@
   document.getElementById('walk-btn').addEventListener('click', () => enterWalk());
   document.getElementById('exit-walk').addEventListener('click', () => exitWalk());
   document.getElementById('stand-btn').addEventListener('click', () => standUp());
+
+  // --- загрузка своего зала (скан GLB/GLTF) ---
+  let venueModel = null;
+  const gltfLoader = new THREE.GLTFLoader();
+  const vmsg = document.getElementById('venue-msg');
+  function showMsg(t, keep){ vmsg.textContent=t; vmsg.className='show'; if(!keep) setTimeout(()=>vmsg.className='', 3000); }
+  function loadVenueFile(file){
+    showMsg('Загружаю зал…', true);
+    const url=URL.createObjectURL(file);
+    gltfLoader.load(url, (gltf)=>{
+      URL.revokeObjectURL(url);
+      if(venueModel) scene.remove(venueModel);
+      const m=gltf.scene;
+      let size=new THREE.Vector3(); new THREE.Box3().setFromObject(m).getSize(size);
+      const maxDim=Math.max(size.x,size.y,size.z);
+      m.scale.setScalar(maxDim<60 ? 100 : 1);           // скан в метрах → в наши сантиметры
+      const box=new THREE.Box3().setFromObject(m), c=new THREE.Vector3(); box.getCenter(c);
+      m.position.x-=c.x; m.position.z-=c.z; m.position.y-=box.min.y;   // на пол, по центру
+      m.traverse(o=>{ if(o.isMesh){ o.receiveShadow=true; o.castShadow=true; if(o.material) o.material.side=THREE.DoubleSide; } });
+      scene.add(m); venueModel=m; floor.visible=false;
+      document.getElementById('clear-venue').style.display='';
+      const d=new THREE.Box3().setFromObject(m).getSize(new THREE.Vector3());
+      showMsg(`Зал загружен: ${Math.round(d.x)}×${Math.round(d.z)} см, высота ${Math.round(d.y)} см`);
+      frameAll();
+    }, undefined, ()=>{ URL.revokeObjectURL(url); showMsg('Не удалось прочитать файл — нужен .glb или .gltf', true); });
+  }
+  document.getElementById('load-venue').addEventListener('click', ()=> document.getElementById('venue-file').click());
+  document.getElementById('venue-file').addEventListener('change', (e)=>{ const f=e.target.files[0]; if(f) loadVenueFile(f); e.target.value=''; });
+  document.getElementById('clear-venue').addEventListener('click', ()=>{ if(venueModel){ scene.remove(venueModel); venueModel=null; } floor.visible=true; document.getElementById('clear-venue').style.display='none'; showMsg('Стандартный пол возвращён'); });
   document.getElementById('panel-head').addEventListener('click', () => {
     const p=document.getElementById('panel'); p.classList.toggle('collapsed');
     p.querySelector('.chev').textContent = p.classList.contains('collapsed') ? '▸' : '▾';
