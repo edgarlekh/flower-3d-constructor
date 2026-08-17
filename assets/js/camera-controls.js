@@ -21,7 +21,8 @@ window.createCameraControls = function(camera, el, opts){
   const POL = opts.polRange || [.30, 1.70];        // наклон: меньше — вид сверху
   const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
   // Динамически менять пределы (например, запереть камеру внутри загруженного зала).
-  function setLimits(o){ o=o||{}; if(o.distMax!=null)DMAX=o.distMax; if(o.distMin!=null)DMIN=o.distMin; if(o.panRadius!=null)PAN_R=o.panRadius; if(o.panY!=null)PAN_Y=o.panY; dist=clamp(dist,DMIN,DMAX); pan(0,0); }
+  let EYE = null;                                 // {minX,maxX,minZ,maxZ} — держать камеру внутри стен
+  function setLimits(o){ o=o||{}; if(o.distMax!=null)DMAX=o.distMax; if(o.distMin!=null)DMIN=o.distMin; if(o.panRadius!=null)PAN_R=o.panRadius; if(o.panY!=null)PAN_Y=o.panY; if('eyeBounds' in o)EYE=o.eyeBounds; dist=clamp(dist,DMIN,DMAX); pan(0,0); place(); }
 
   let az = .7, pol = 1.28, dist = 110;
   const target = new THREE.Vector3(0, 32, 0);
@@ -32,6 +33,7 @@ window.createCameraControls = function(camera, el, opts){
       target.x + dist*Math.sin(pol)*Math.cos(az),
       target.y + dist*Math.cos(pol),
       target.z + dist*Math.sin(pol)*Math.sin(az));
+    if (EYE){ camera.position.x=clamp(camera.position.x,EYE.minX,EYE.maxX); camera.position.z=clamp(camera.position.z,EYE.minZ,EYE.maxZ); }
     camera.lookAt(target);
   }
   function pan(dx, dy){

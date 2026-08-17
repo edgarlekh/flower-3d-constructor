@@ -524,11 +524,12 @@
   const gltfLoader = new THREE.GLTFLoader();
   // границы загруженной комнаты → запираем камеру и ходьбу внутри
   function updateVenueBounds(){
-    if(!venueModel){ venueBounds=null; cam.setLimits({panRadius:2000, panY:[-10,300], distMax:3500}); return; }
+    if(!venueModel){ venueBounds=null; cam.setLimits({panRadius:2000, panY:[-10,300], distMax:3500, eyeBounds:null}); return; }
     const b=new THREE.Box3().setFromObject(venueModel);
     venueBounds={ minX:b.min.x, maxX:b.max.x, minZ:b.min.z, maxZ:b.max.z, height:b.max.y,
       cx:(b.min.x+b.max.x)/2, cz:(b.min.z+b.max.z)/2, radius:Math.hypot((b.max.x-b.min.x)/2,(b.max.z-b.min.z)/2) };
-    cam.setLimits({ panRadius:venueBounds.radius*0.95, panY:[0, Math.min(venueBounds.height,260)], distMax:venueBounds.radius*2.4 });
+    cam.setLimits({ panRadius:venueBounds.radius*0.95, panY:[0, Math.min(venueBounds.height,260)], distMax:venueBounds.radius*2.4,
+      eyeBounds:{ minX:venueBounds.minX+25, maxX:venueBounds.maxX-25, minZ:venueBounds.minZ+25, maxZ:venueBounds.maxZ-25 } });
   }
   const vmsg = document.getElementById('venue-msg');
   function showMsg(t, keep){ vmsg.textContent=t; vmsg.className='show'; if(!keep) setTimeout(()=>vmsg.className='', 3000); }
