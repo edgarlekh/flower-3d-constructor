@@ -90,6 +90,7 @@
 
   // --- состояние приложения ---
   const state = { cart:{}, vaseId:'none', variantSeed:0 };
+  let editRef = null;   // ссылка на редактируемый букет в зале (из «Изменить»)
 
   // --- сцена ---
   const stage = document.getElementById('stage');
@@ -235,7 +236,7 @@
   document.getElementById('tohall').addEventListener('click', () => {
     const m = {}; for (const k in manual){ const v = manual[k]; m[k] = [v.x, v.y, v.z]; }
     localStorage.setItem('flowerPending', JSON.stringify({
-      cart: state.cart, vaseId: state.vaseId, variantSeed: state.variantSeed, manual: m,
+      cart: state.cart, vaseId: state.vaseId, variantSeed: state.variantSeed, manual: m, editRef: editRef,
     }));
     location.href = 'hall.html';
   });
@@ -247,6 +248,7 @@
     Object.assign(state.cart, edit.cart);
     if (edit.vaseId) state.vaseId = edit.vaseId;
     if (edit.variantSeed) state.variantSeed = edit.variantSeed;
+    if (edit.editRef){ editRef = edit.editRef; document.getElementById('tohall').textContent = 'Сохранить букет →'; }
     localStorage.removeItem('flowerEditCart');
   } else {
     state.cart.red = 3; state.cart.tul = 2; state.cart.eus = 3;

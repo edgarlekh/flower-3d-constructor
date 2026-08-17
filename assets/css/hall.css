@@ -196,11 +196,19 @@ body.view-only #topbar,body.view-only #panel,body.view-only #tools .tgroup,body.
 
 /* живые размеры при перетаскивании */
 #dims .dim{
-  position:fixed;z-index:4;transform:translate(-50%,-50%);pointer-events:none;display:none;
+  position:fixed;z-index:4;transform:translateY(-50%);pointer-events:none;display:none;
   background:#3a352f;color:#fff;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;
   padding:3px 9px;border-radius:999px;box-shadow:0 5px 14px rgba(0,0,0,.28);white-space:nowrap;
 }
 #dims .dim.warn{background:#c0553f}
+/* номера столов */
+#tablenums .tablenum{
+  position:fixed;z-index:3;transform:translate(-50%,-50%);pointer-events:none;
+  min-width:26px;height:26px;padding:0 6px;border-radius:999px;display:grid;place-items:center;
+  background:rgba(255,255,255,.92);border:1px solid var(--ui-line);color:#5a5348;
+  font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;box-shadow:0 3px 10px rgba(60,45,35,.16);
+}
+#tablenums .tablenum.sel{background:var(--accent);color:#fff;border-color:transparent}
 
 /* подсказка — тонкая пилюля по центру */
 #hint{
