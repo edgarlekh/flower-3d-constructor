@@ -542,6 +542,8 @@
     // не заходить в столы
     tables.forEach(t=>{ const dx=walk.tx-t.position.x, dz=walk.tz-t.position.z, d=Math.hypot(dx,dz), R=TABLE_R+16; if(d<R&&d>0.01){ walk.tx=t.position.x+dx/d*R; walk.tz=t.position.z+dz/d*R; } });
     walk.x+=(walk.tx-walk.x)*0.18; walk.z+=(walk.tz-walk.z)*0.18; walk.eye+=(walk.teye-walk.eye)*0.15;
+    if(Math.abs(walk.eye-walk.teye)<0.4) walk.eye=walk.teye;   // доводим высоту точно до 165/115
+    if(Math.abs(walk.tx-walk.x)<0.3) walk.x=walk.tx; if(Math.abs(walk.tz-walk.z)<0.3) walk.z=walk.tz;
     if(walk.face){ walk.yaw=Math.atan2(walk.face.x-walk.x, walk.face.z-walk.z); const dist=Math.hypot(walk.face.x-walk.x,walk.face.z-walk.z); walk.pitch=cl(Math.atan2(walk.face.y-walk.eye,dist),-1.1,0.55); }
     camera.position.set(walk.x, walk.eye, walk.z);
     const cp=Math.cos(walk.pitch);
