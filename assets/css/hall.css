@@ -109,6 +109,13 @@ body.walk-mode #tools,body.walk-mode #panel,body.walk-mode #hint,body.walk-mode 
 #walkbar button.primary:hover{background:var(--accent-deep);color:#fff}
 @media (max-width:640px){ #walkbar .whint{display:none} }
 
+/* плавное затемнение при входе/выходе в прогулку */
+#fade{
+  position:fixed;inset:0;z-index:20;pointer-events:none;opacity:0;
+  background:#EDE6DA;transition:opacity .24s ease;
+}
+#fade.on{opacity:1}
+
 /* левая панель: стол · размеры · внимание (сворачиваемая) */
 #panel{
   position:fixed;left:12px;top:74px;z-index:3;width:238px;color:var(--ui-text);

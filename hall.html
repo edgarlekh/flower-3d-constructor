@@ -60,6 +60,7 @@
 </div>
 
 <div id="hint" class="label">Тяните букет/тарелку — по столу · скатерть — двигаете стол · двойной клик по столу — подлететь · колесо — зум</div>
+<div id="fade"></div>
 <div id="loader" class="scene-loader"><div class="spin"></div>Накрываем столы…</div>
 
 <script src="assets/js/three.min.js"></script>
@@ -96,18 +97,38 @@
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.02;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   stage.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
+  const WARM = 0xEDE6DA;
+  scene.background = new THREE.Color(WARM);
+  scene.fog = new THREE.Fog(WARM, 620, 2400);          // мягкая дымка — глубина зала
   const camera = new THREE.PerspectiveCamera(42, 1, .1, 8000);
-  scene.add(new THREE.HemisphereLight(0xFFFFFF, 0xD8D4CC, .62));
-  const keyLight = new THREE.DirectionalLight(0xFFF7EE, 1.05); keyLight.position.set(220,360,180); scene.add(keyLight);
-  const rimLight = new THREE.DirectionalLight(0xDCE6F2, .3); rimLight.position.set(-200,120,-160); scene.add(rimLight);
 
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(1400, 56),
-    new THREE.MeshStandardMaterial({color:0xEDEBE5, roughness:.96}));
-  floor.rotation.x = -Math.PI/2; scene.add(floor);
+  scene.add(new THREE.HemisphereLight(0xFFF6E8, 0xCFC6B6, .58));   // тёплое небо/пол
+  const ambient = new THREE.AmbientLight(0xFFFFFF, .12); scene.add(ambient);
+  const keyLight = new THREE.DirectionalLight(0xFFEFD6, 1.15);      // тёплый ключевой
+  keyLight.position.set(280, 560, 220); keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(2048, 2048);
+  const sc = keyLight.shadow.camera; sc.near=60; sc.far=1500; sc.left=-560; sc.right=560; sc.top=560; sc.bottom=-560; sc.updateProjectionMatrix();
+  keyLight.shadow.bias = -0.0007; keyLight.shadow.radius = 4;
+  scene.add(keyLight);
+  const rimLight = new THREE.DirectionalLight(0xDCE6F2, .28); rimLight.position.set(-220,150,-180); scene.add(rimLight);
+
+  // пол с мягким виньетированием (как освещённая площадка зала)
+  const floorTex = (function(){
+    const c=document.createElement('canvas'); c.width=c.height=512;
+    const g=c.getContext('2d').createRadialGradient(256,256,40,256,256,256);
+    g.addColorStop(0,'#F3EDE3'); g.addColorStop(.6,'#E9E1D4'); g.addColorStop(1,'#DCD3C4');
+    const cx=c.getContext('2d'); cx.fillStyle=g; cx.fillRect(0,0,512,512);
+    const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; return t;
+  })();
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(1500, 64),
+    new THREE.MeshStandardMaterial({map:floorTex, roughness:.9}));
+  floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
 
   // кольцо выделения активного стола
   const selRing = new THREE.Mesh(new THREE.TorusGeometry(TABLE_R + 12, 1.6, 8, 64),
@@ -226,19 +247,20 @@
     return new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false});
   })();
 
+  const shade = (m)=>{ m.castShadow=true; return m; };
   function chairMesh(){
     const g=new THREE.Group();
-    const seat=new THREE.Mesh(seatGeo,chairMat); seat.position.y=45; g.add(seat);
-    const back=new THREE.Mesh(backGeo,chairMat); back.position.set(0,66,20); g.add(back);
-    for(const sx of [-18,18]) for(const sz of [-18,18]){ const l=new THREE.Mesh(legGeo,chairMat); l.position.set(sx,22.5,sz); g.add(l); }
+    const seat=shade(new THREE.Mesh(seatGeo,chairMat)); seat.position.y=45; g.add(seat);
+    const back=shade(new THREE.Mesh(backGeo,chairMat)); back.position.set(0,66,20); g.add(back);
+    for(const sx of [-18,18]) for(const sz of [-18,18]){ const l=shade(new THREE.Mesh(legGeo,chairMat)); l.position.set(sx,22.5,sz); g.add(l); }
     return g;
   }
   function settingMesh(){   // тарелка + салфетка + вилка + нож (двигается целиком)
     const g=new THREE.Group();
-    g.add(new THREE.Mesh(plateGeo,plateMat));
-    const nap=new THREE.Mesh(napkinGeo,napkinMat); nap.position.set(-PLATE_RAD-11,-0.2,0); g.add(nap);
-    const fork=new THREE.Mesh(cutGeo,metalMat); fork.position.set(-PLATE_RAD-10,0.6,0); g.add(fork);
-    const knife=new THREE.Mesh(cutGeo,metalMat); knife.position.set(PLATE_RAD+5,0.4,0); g.add(knife);
+    g.add(shade(new THREE.Mesh(plateGeo,plateMat)));
+    const nap=shade(new THREE.Mesh(napkinGeo,napkinMat)); nap.position.set(-PLATE_RAD-11,-0.2,0); g.add(nap);
+    const fork=shade(new THREE.Mesh(cutGeo,metalMat)); fork.position.set(-PLATE_RAD-10,0.6,0); g.add(fork);
+    const knife=shade(new THREE.Mesh(cutGeo,metalMat)); knife.position.set(PLATE_RAD+5,0.4,0); g.add(knife);
     return g;
   }
 
@@ -293,8 +315,7 @@
     const root = res.root;
     root.position.set(lx, TABLE_H, lz);
     root.userData = { kind:'bouquet', table:t, spec, footprint: Math.max(res.focus.radius, 8), grow:0 };
-    const fp = root.userData.footprint;
-    const sh = new THREE.Mesh(blobGeo, blobMat); sh.rotation.x=-Math.PI/2; sh.position.y=0.35; sh.scale.set(fp*2.6,fp*2.6,1); root.add(sh);
+    root.traverse(o=>{ if(o.isMesh) o.castShadow=true; });   // букет отбрасывает настоящую тень
     root.scale.setScalar(0.001);
     t.userData.bouquets.add(root);
     currentSpec = spec;
@@ -311,11 +332,11 @@
     const t = new THREE.Group();
     t.position.set(data.x||0, 0, data.z||0);
     t.userData = { kind:'table', seats: data.seats||SEATS_DEFAULT };
-    const top=new THREE.Mesh(topGeo,woodMat); top.position.y=TABLE_H-2; t.add(top);
-    const stem=new THREE.Mesh(stemGeo,woodMat); stem.position.y=(TABLE_H-4)/2; t.add(stem);
-    const foot=new THREE.Mesh(footGeo,woodMat); foot.position.y=1.5; t.add(foot);
-    const clothTop=new THREE.Mesh(clothTopGeo,clothMat); clothTop.rotation.x=-Math.PI/2; clothTop.position.y=TABLE_H+0.3; clothTop.userData={kind:'table',table:t}; t.add(clothTop);
-    const skirt=new THREE.Mesh(skirtGeo,clothMat); skirt.position.y=TABLE_H/2+1; skirt.userData={kind:'table',table:t}; t.add(skirt);
+    const top=new THREE.Mesh(topGeo,woodMat); top.position.y=TABLE_H-2; top.castShadow=true; t.add(top);
+    const stem=new THREE.Mesh(stemGeo,woodMat); stem.position.y=(TABLE_H-4)/2; stem.castShadow=true; t.add(stem);
+    const foot=new THREE.Mesh(footGeo,woodMat); foot.position.y=1.5; foot.castShadow=true; t.add(foot);
+    const clothTop=new THREE.Mesh(clothTopGeo,clothMat); clothTop.rotation.x=-Math.PI/2; clothTop.position.y=TABLE_H+0.3; clothTop.receiveShadow=true; clothTop.userData={kind:'table',table:t}; t.add(clothTop);
+    const skirt=new THREE.Mesh(skirtGeo,clothMat); skirt.position.y=TABLE_H/2+1; skirt.castShadow=true; skirt.receiveShadow=true; skirt.userData={kind:'table',table:t}; t.add(skirt);
     t.userData.handles=[clothTop,skirt];
     t.userData.settings=new THREE.Group(); t.add(t.userData.settings);
     t.userData.bouquets=new THREE.Group(); t.add(t.userData.bouquets);
@@ -487,67 +508,81 @@
      клик по столу — сесть (глаза на 115 см), кнопка «Встать».
      ============================================================ */
   const EYE_STAND = 165, EYE_SIT = 115, cl = (v,a,b)=>Math.max(a,Math.min(b,v));
-  const walk = { x:0, z:0, eye:EYE_STAND, yaw:0, pitch:-0.05, tx:0, tz:0, teye:EYE_STAND, face:null };
+  const walk = { x:0, z:0, eye:EYE_STAND, yaw:0, pitch:-0.05, teye:EYE_STAND, vx:0, vz:0, bob:0, goto:null, face:null };
   const keys = {};
   let wptr = null;
 
   function venueRadius(){ let r=TABLE_R; tables.forEach(t=>r=Math.max(r, Math.hypot(t.position.x,t.position.z)+CHAIR_OUTER)); return r; }
+  function fade(cb){ const f=document.getElementById('fade'); f.classList.add('on'); setTimeout(()=>{ if(cb)cb(); f.classList.remove('on'); }, 240); }
 
   function enterWalk(){
-    mode='walk'; cam.setPaused(true); document.body.classList.add('walk-mode');
-    document.getElementById('hint').classList.add('gone');
-    // старт: у края зала лицом к центру, стоя
-    const R = venueRadius()+120, a = Math.PI*0.25;
-    walk.x = walk.tx = Math.cos(a)*R; walk.z = walk.tz = Math.sin(a)*R;
-    walk.eye = walk.teye = EYE_STAND;
-    walk.yaw = Math.atan2(-walk.x, -walk.z); walk.pitch = -0.05; walk.face=null;
-    selRing.visible=false;
+    document.body.classList.add('walk-mode'); document.getElementById('hint').classList.add('gone');
+    fade(()=>{
+      mode='walk'; cam.setPaused(true);
+      const R = venueRadius()+130, a = Math.PI*0.28;   // старт у края зала лицом к центру, стоя
+      walk.x = Math.cos(a)*R; walk.z = Math.sin(a)*R; walk.eye = walk.teye = EYE_STAND;
+      walk.vx = walk.vz = 0; walk.goto = null; walk.face = null; walk.bob = 0;
+      walk.yaw = Math.atan2(-walk.x, -walk.z); walk.pitch = -0.02;
+      selRing.visible = false;
+    });
   }
-  function exitWalk(){ mode='edit'; cam.setPaused(false); document.body.classList.remove('walk-mode'); frameAll(); if(selected) selRing.visible=true; }
-  function standUp(){ walk.teye=EYE_STAND; walk.face=null; }
+  function exitWalk(){ fade(()=>{ mode='edit'; cam.setPaused(false); document.body.classList.remove('walk-mode'); frameAll(); if(selected) selRing.visible=true; }); }
+  function standUp(){ walk.teye = EYE_STAND; walk.face = null; }
 
-  // клик в режиме прогулки: по столу — сесть, по полу — подойти
+  // клик в прогулке: по столу — сесть (плавно подъедем), по полу — подойти
   function walkClick(e){
     const r=rect(); nd.x=((e.clientX-r.left)/r.width)*2-1; nd.y=-((e.clientY-r.top)/r.height)*2+1;
     rc.setFromCamera(nd, camera);
-    // сначала столы (сесть)
     let o=null; const th=rc.intersectObjects(pickables(), true);
     if(th.length){ o=th[0].object; while(o && !(o.userData&&o.userData.table)) o=o.parent; }
     if(o && o.userData.table){ sitAt(o.userData.table); return; }
-    // иначе — пол (подойти)
     const fh=rc.intersectObject(floor, false);
-    if(fh.length){ walk.tx=cl(fh[0].point.x,-1400,1400); walk.tz=cl(fh[0].point.z,-1400,1400); walk.teye=EYE_STAND; walk.face=null; }
+    if(fh.length){ walk.goto={x:cl(fh[0].point.x,-1400,1400), z:cl(fh[0].point.z,-1400,1400)}; walk.teye=EYE_STAND; walk.face=null; }
   }
   function sitAt(t){
     const seats=t.userData.seats; let bestA=0, best=Infinity;
     for(let i=0;i<seats;i++){ const a=i/seats*Math.PI*2 - Math.PI/2; const sx=t.position.x+Math.cos(a)*CHAIR_R, sz=t.position.z+Math.sin(a)*CHAIR_R; const d=Math.hypot(sx-walk.x,sz-walk.z); if(d<best){best=d;bestA=a;} }
-    walk.tx=t.position.x+Math.cos(bestA)*(CHAIR_R+6); walk.tz=t.position.z+Math.sin(bestA)*(CHAIR_R+6);
+    walk.goto={ x:t.position.x+Math.cos(bestA)*(CHAIR_R+6), z:t.position.z+Math.sin(bestA)*(CHAIR_R+6) };
     walk.teye=EYE_SIT; walk.face=new THREE.Vector3(t.position.x, TABLE_H+8, t.position.z);
     selectTable(t);
   }
 
-  // взгляд мышью (только в прогулке)
+  // взгляд мышью (только в прогулке) — плавно, ход прекращает авто-поворот
   renderer.domElement.addEventListener('pointerdown', e=>{ if(mode!=='walk')return; wptr={x:e.clientX,y:e.clientY,drag:false}; try{renderer.domElement.setPointerCapture(e.pointerId);}catch(_){} });
-  renderer.domElement.addEventListener('pointermove', e=>{ if(mode!=='walk'||!wptr)return; const dx=e.clientX-wptr.x, dy=e.clientY-wptr.y; wptr.x=e.clientX; wptr.y=e.clientY; if(Math.hypot(dx,dy)>2)wptr.drag=true; walk.yaw-=dx*0.005; walk.pitch=cl(walk.pitch-dy*0.005,-1.1,0.55); walk.face=null; });
+  renderer.domElement.addEventListener('pointermove', e=>{ if(mode!=='walk'||!wptr)return; const dx=e.clientX-wptr.x, dy=e.clientY-wptr.y; wptr.x=e.clientX; wptr.y=e.clientY; if(Math.hypot(dx,dy)>2){wptr.drag=true; walk.face=null;} walk.yaw-=dx*0.0042; walk.pitch=cl(walk.pitch-dy*0.0042,-1.05,0.5); });
   renderer.domElement.addEventListener('pointerup', e=>{ if(mode!=='walk')return; const d=wptr&&wptr.drag; wptr=null; if(!d) walkClick(e); });
   addEventListener('keydown', e=>{ if(mode==='walk') keys[e.key.toLowerCase()]=true; });
   addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
 
   function updateWalk(){
-    const spd=6, fx=Math.sin(walk.yaw), fz=Math.cos(walk.yaw);
-    if(keys['w']||keys['arrowup']){ walk.tx+=fx*spd; walk.tz+=fz*spd; walk.face=null; }
-    if(keys['s']||keys['arrowdown']){ walk.tx-=fx*spd; walk.tz-=fz*spd; walk.face=null; }
-    if(keys['a']||keys['arrowleft']){ walk.tx+=fz*spd; walk.tz-=fx*spd; walk.face=null; }
-    if(keys['d']||keys['arrowright']){ walk.tx-=fz*spd; walk.tz+=fx*spd; walk.face=null; }
-    // не заходить в столы
-    tables.forEach(t=>{ const dx=walk.tx-t.position.x, dz=walk.tz-t.position.z, d=Math.hypot(dx,dz), R=TABLE_R+16; if(d<R&&d>0.01){ walk.tx=t.position.x+dx/d*R; walk.tz=t.position.z+dz/d*R; } });
-    walk.x+=(walk.tx-walk.x)*0.18; walk.z+=(walk.tz-walk.z)*0.18; walk.eye+=(walk.teye-walk.eye)*0.15;
-    if(Math.abs(walk.eye-walk.teye)<0.4) walk.eye=walk.teye;   // доводим высоту точно до 165/115
-    if(Math.abs(walk.tx-walk.x)<0.3) walk.x=walk.tx; if(Math.abs(walk.tz-walk.z)<0.3) walk.z=walk.tz;
-    if(walk.face){ walk.yaw=Math.atan2(walk.face.x-walk.x, walk.face.z-walk.z); const dist=Math.hypot(walk.face.x-walk.x,walk.face.z-walk.z); walk.pitch=cl(Math.atan2(walk.face.y-walk.eye,dist),-1.1,0.55); }
-    camera.position.set(walk.x, walk.eye, walk.z);
+    const fx=Math.sin(walk.yaw), fz=Math.cos(walk.yaw);
+    let ix=0, iz=0;
+    if(keys['w']||keys['arrowup']){ ix+=fx; iz+=fz; }
+    if(keys['s']||keys['arrowdown']){ ix-=fx; iz-=fz; }
+    if(keys['a']||keys['arrowleft']){ ix+=fz; iz-=fx; }
+    if(keys['d']||keys['arrowright']){ ix-=fz; iz+=fx; }
+    const il=Math.hypot(ix,iz);
+    if(il>0.01){ ix/=il; iz/=il; walk.vx+=ix*0.9; walk.vz+=iz*0.9; walk.goto=null; walk.face=null; }
+    walk.vx*=0.82; walk.vz*=0.82;
+    const vv=Math.hypot(walk.vx,walk.vz), maxv=7.5; if(vv>maxv){ walk.vx*=maxv/vv; walk.vz*=maxv/vv; }
+    walk.x+=walk.vx; walk.z+=walk.vz;
+    if(walk.goto){ walk.x+=(walk.goto.x-walk.x)*0.09; walk.z+=(walk.goto.z-walk.z)*0.09; if(Math.hypot(walk.goto.x-walk.x,walk.goto.z-walk.z)<3) walk.goto=null; }
+    // не заходить сквозь столы
+    tables.forEach(t=>{ const dx=walk.x-t.position.x, dz=walk.z-t.position.z, d=Math.hypot(dx,dz), R=TABLE_R+16; if(d<R&&d>0.01){ walk.x=t.position.x+dx/d*R; walk.z=t.position.z+dz/d*R; walk.vx*=0.3; walk.vz*=0.3; } });
+    walk.eye+=(walk.teye-walk.eye)*0.15; if(Math.abs(walk.eye-walk.teye)<0.4) walk.eye=walk.teye;
+    // авто-поворот к столу при посадке (плавно)
+    if(walk.face){
+      let ty=Math.atan2(walk.face.x-walk.x, walk.face.z-walk.z), d=ty-walk.yaw;
+      while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; walk.yaw+=d*0.15;
+      const dist=Math.hypot(walk.face.x-walk.x,walk.face.z-walk.z);
+      walk.pitch+=(cl(Math.atan2(walk.face.y-walk.eye,dist),-1.05,0.5)-walk.pitch)*0.15;
+    }
+    // покачивание головой при ходьбе
+    const spd=Math.hypot(walk.vx,walk.vz); walk.bob+=spd*0.32;
+    const bob=Math.sin(walk.bob)*Math.min(spd*0.22,1.3), ey=walk.eye+bob;
+    camera.position.set(walk.x, ey, walk.z);
     const cp=Math.cos(walk.pitch);
-    camera.lookAt(walk.x+cp*Math.sin(walk.yaw), walk.eye+Math.sin(walk.pitch), walk.z+cp*Math.cos(walk.yaw));
+    camera.lookAt(walk.x+cp*Math.sin(walk.yaw), ey+Math.sin(walk.pitch), walk.z+cp*Math.cos(walk.yaw));
   }
 
   function tick(){
