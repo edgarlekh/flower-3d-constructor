@@ -30,6 +30,15 @@
     <button id="remove">Убрать букет</button>
   </div>
   <button id="reset">Показать все</button>
+  <button id="walk-btn" class="walk">◆ Пройтись по залу</button>
+</div>
+
+<div id="walkbar">
+  <span class="wtitle">Вид гостя</span>
+  <span class="whint">Мышь — оглядеться · WASD/стрелки — идти · клик по полу — подойти · клик по столу — сесть</span>
+  <span class="wspacer"></span>
+  <button id="stand-btn">Встать</button>
+  <button id="exit-walk" class="primary">Выйти</button>
 </div>
 
 <aside id="panel">
@@ -261,6 +270,7 @@
   const tables = [];
   let selected = null;
   let currentSpec = DEFAULT;
+  let mode = 'edit';                    // 'edit' — редактор, 'walk' — прогулка гостя
 
   function buildSettings(t, saved){
     const sg = t.userData.settings; const seats = t.userData.seats;
@@ -372,7 +382,7 @@
     getPickables: pickables,
     planeMode: 'horizontal',
     getAnchor: (o) => o.userData.kind==='table' ? o.userData.table.position : o.getWorldPosition(_wp),
-    canGrab: () => true,
+    canGrab: () => mode==='edit',
     setCameraPaused: (v) => cam.setPaused(v),
     moveTo: onMove,
     onGrab: (o) => { selectTable(o.userData.table); document.getElementById('hint').classList.add('gone'); },
@@ -382,6 +392,7 @@
   // Двойной клик по столу — камера подлетает к нему (легко переходить между столами).
   const rc = new THREE.Raycaster(), nd = new THREE.Vector2();
   renderer.domElement.addEventListener('dblclick', e => {
+    if (mode!=='edit') return;
     const r = rect(); nd.x=((e.clientX-r.left)/r.width)*2-1; nd.y=-((e.clientY-r.top)/r.height)*2+1;
     rc.setFromCamera(nd, camera);
     const hits = rc.intersectObjects(pickables(), true);
@@ -459,6 +470,9 @@
   document.getElementById('g-minus').addEventListener('click', () => { if(selected){ selected.userData.seats=Math.max(2,selected.userData.seats-1); buildSettings(selected); afterChange(false);} });
   document.getElementById('g-plus').addEventListener('click',  () => { if(selected){ selected.userData.seats=Math.min(14,selected.userData.seats+1); buildSettings(selected); afterChange(false);} });
   document.getElementById('reset').addEventListener('click', () => frameAll());
+  document.getElementById('walk-btn').addEventListener('click', () => enterWalk());
+  document.getElementById('exit-walk').addEventListener('click', () => exitWalk());
+  document.getElementById('stand-btn').addEventListener('click', () => standUp());
   document.getElementById('panel-head').addEventListener('click', () => {
     const p=document.getElementById('panel'); p.classList.toggle('collapsed');
     p.querySelector('.chev').textContent = p.classList.contains('collapsed') ? '▸' : '▾';
@@ -467,12 +481,79 @@
   function resize(){ const w=stage.clientWidth,h=stage.clientHeight; renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); }
   addEventListener('resize', resize);
 
+  /* ============================================================
+     РЕЖИМ ПРОГУЛКИ (вид гостя): ходьба от первого лица.
+     Мышь — оглядеться, WASD/стрелки — идти, клик по полу — подойти,
+     клик по столу — сесть (глаза на 115 см), кнопка «Встать».
+     ============================================================ */
+  const EYE_STAND = 165, EYE_SIT = 115, cl = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const walk = { x:0, z:0, eye:EYE_STAND, yaw:0, pitch:-0.05, tx:0, tz:0, teye:EYE_STAND, face:null };
+  const keys = {};
+  let wptr = null;
+
+  function venueRadius(){ let r=TABLE_R; tables.forEach(t=>r=Math.max(r, Math.hypot(t.position.x,t.position.z)+CHAIR_OUTER)); return r; }
+
+  function enterWalk(){
+    mode='walk'; cam.setPaused(true); document.body.classList.add('walk-mode');
+    document.getElementById('hint').classList.add('gone');
+    // старт: у края зала лицом к центру, стоя
+    const R = venueRadius()+120, a = Math.PI*0.25;
+    walk.x = walk.tx = Math.cos(a)*R; walk.z = walk.tz = Math.sin(a)*R;
+    walk.eye = walk.teye = EYE_STAND;
+    walk.yaw = Math.atan2(-walk.x, -walk.z); walk.pitch = -0.05; walk.face=null;
+    selRing.visible=false;
+  }
+  function exitWalk(){ mode='edit'; cam.setPaused(false); document.body.classList.remove('walk-mode'); frameAll(); if(selected) selRing.visible=true; }
+  function standUp(){ walk.teye=EYE_STAND; walk.face=null; }
+
+  // клик в режиме прогулки: по столу — сесть, по полу — подойти
+  function walkClick(e){
+    const r=rect(); nd.x=((e.clientX-r.left)/r.width)*2-1; nd.y=-((e.clientY-r.top)/r.height)*2+1;
+    rc.setFromCamera(nd, camera);
+    // сначала столы (сесть)
+    let o=null; const th=rc.intersectObjects(pickables(), true);
+    if(th.length){ o=th[0].object; while(o && !(o.userData&&o.userData.table)) o=o.parent; }
+    if(o && o.userData.table){ sitAt(o.userData.table); return; }
+    // иначе — пол (подойти)
+    const fh=rc.intersectObject(floor, false);
+    if(fh.length){ walk.tx=cl(fh[0].point.x,-1400,1400); walk.tz=cl(fh[0].point.z,-1400,1400); walk.teye=EYE_STAND; walk.face=null; }
+  }
+  function sitAt(t){
+    const seats=t.userData.seats; let bestA=0, best=Infinity;
+    for(let i=0;i<seats;i++){ const a=i/seats*Math.PI*2 - Math.PI/2; const sx=t.position.x+Math.cos(a)*CHAIR_R, sz=t.position.z+Math.sin(a)*CHAIR_R; const d=Math.hypot(sx-walk.x,sz-walk.z); if(d<best){best=d;bestA=a;} }
+    walk.tx=t.position.x+Math.cos(bestA)*(CHAIR_R+6); walk.tz=t.position.z+Math.sin(bestA)*(CHAIR_R+6);
+    walk.teye=EYE_SIT; walk.face=new THREE.Vector3(t.position.x, TABLE_H+8, t.position.z);
+    selectTable(t);
+  }
+
+  // взгляд мышью (только в прогулке)
+  renderer.domElement.addEventListener('pointerdown', e=>{ if(mode!=='walk')return; wptr={x:e.clientX,y:e.clientY,drag:false}; try{renderer.domElement.setPointerCapture(e.pointerId);}catch(_){} });
+  renderer.domElement.addEventListener('pointermove', e=>{ if(mode!=='walk'||!wptr)return; const dx=e.clientX-wptr.x, dy=e.clientY-wptr.y; wptr.x=e.clientX; wptr.y=e.clientY; if(Math.hypot(dx,dy)>2)wptr.drag=true; walk.yaw-=dx*0.005; walk.pitch=cl(walk.pitch-dy*0.005,-1.1,0.55); walk.face=null; });
+  renderer.domElement.addEventListener('pointerup', e=>{ if(mode!=='walk')return; const d=wptr&&wptr.drag; wptr=null; if(!d) walkClick(e); });
+  addEventListener('keydown', e=>{ if(mode==='walk') keys[e.key.toLowerCase()]=true; });
+  addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
+
+  function updateWalk(){
+    const spd=6, fx=Math.sin(walk.yaw), fz=Math.cos(walk.yaw);
+    if(keys['w']||keys['arrowup']){ walk.tx+=fx*spd; walk.tz+=fz*spd; walk.face=null; }
+    if(keys['s']||keys['arrowdown']){ walk.tx-=fx*spd; walk.tz-=fz*spd; walk.face=null; }
+    if(keys['a']||keys['arrowleft']){ walk.tx+=fz*spd; walk.tz-=fx*spd; walk.face=null; }
+    if(keys['d']||keys['arrowright']){ walk.tx-=fz*spd; walk.tz+=fx*spd; walk.face=null; }
+    // не заходить в столы
+    tables.forEach(t=>{ const dx=walk.tx-t.position.x, dz=walk.tz-t.position.z, d=Math.hypot(dx,dz), R=TABLE_R+16; if(d<R&&d>0.01){ walk.tx=t.position.x+dx/d*R; walk.tz=t.position.z+dz/d*R; } });
+    walk.x+=(walk.tx-walk.x)*0.18; walk.z+=(walk.tz-walk.z)*0.18; walk.eye+=(walk.teye-walk.eye)*0.15;
+    if(walk.face){ walk.yaw=Math.atan2(walk.face.x-walk.x, walk.face.z-walk.z); const dist=Math.hypot(walk.face.x-walk.x,walk.face.z-walk.z); walk.pitch=cl(Math.atan2(walk.face.y-walk.eye,dist),-1.1,0.55); }
+    camera.position.set(walk.x, walk.eye, walk.z);
+    const cp=Math.cos(walk.pitch);
+    camera.lookAt(walk.x+cp*Math.sin(walk.yaw), walk.eye+Math.sin(walk.pitch), walk.z+cp*Math.cos(walk.yaw));
+  }
+
   function tick(){
     requestAnimationFrame(tick);
     tables.forEach(t => t.userData.bouquets.children.forEach(b => {
       if (b.userData.grow < 1){ b.userData.grow=Math.min(1,b.userData.grow+.06); b.scale.setScalar(1-Math.pow(1-b.userData.grow,3)); }
     }));
-    cam.updateInertia();
+    if (mode==='walk') updateWalk(); else cam.updateInertia();
     renderer.render(scene, camera);
   }
 
@@ -494,7 +575,8 @@
   updateReadout(); renderWarnings(); saveHall(); frameAll(); tick();
   const loader=document.getElementById('loader'); if(loader){ loader.classList.add('gone'); setTimeout(()=>loader.remove(),450); }
 
-  window.hallDebug = { scene, camera, cam, tables, get selected(){return selected;}, createTable, addBouquet, computeWarnings, drag, TABLE_R, TABLE_H, pickables };
+  window.hallDebug = { scene, camera, cam, tables, get selected(){return selected;}, createTable, addBouquet, computeWarnings, drag, TABLE_R, TABLE_H, pickables,
+    enterWalk, exitWalk, sitAt, updateWalk, walk, keys, get mode(){return mode;} };
 })();
 </script>
 </body>
