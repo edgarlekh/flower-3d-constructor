@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Цветочный конструктор — соберите свадебный декор и узнайте цену</title>
+  <meta name="description" content="Соберите свадебный цветочный букет в 3D, подвиньте каждый цветок руками и сразу увидьте цену. В реальных сантиметрах.">
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <style>
+    .hero {
+      min-height: 100svh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 48px 20px;
+    }
+    .badge {
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-size: clamp(30px, 7vw, 52px);
+      line-height: 1.1;
+      margin: 0 0 16px;
+      max-width: 14ch;
+    }
+    .lead {
+      font-size: clamp(17px, 4vw, 21px);
+      color: var(--muted);
+      max-width: 34ch;
+      margin: 0 0 36px;
+    }
+    .points {
+      margin: 48px auto 0;
+      display: grid;
+      gap: 20px;
+      max-width: 560px;
+      text-align: left;
+    }
+    .point {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+    }
+    .point b { display: block; margin-bottom: 4px; }
+    .point span { color: var(--muted); font-size: 15px; }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 32px 20px;
+    }
+  </style>
+</head>
+<body>
+  <main class="hero">
+    <div class="wrap">
+      <div class="badge">Свадебный цветочный декор</div>
+      <h1>Соберите букет и сразу узнайте цену</h1>
+      <p class="lead">
+        Наберите цветы, посмотрите букет в 3D и подвиньте каждый цветок руками —
+        туда, куда хотите. Всё в реальных сантиметрах.
+      </p>
+      <a class="btn" href="constructor.html">Собрать букет →</a>
+
+      <div class="points">
+        <div class="point">
+          <b>Руками, а не автоматом</b>
+          <span>Программа собирает стартовый вариант, а дальше вы двигаете
+          каждый цветок сами — как флорист за столом.</span>
+        </div>
+        <div class="point">
+          <b>Реальные размеры</b>
+          <span>Ваза 35 см — это 35 см. Сразу видно, влезает букет или нет.</span>
+        </div>
+        <div class="point">
+          <b>Честная смета</b>
+          <span>Цена собирается на глазах: цветы, упаковка, работа — раздельно.</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Прототип. Показываем логику, не финальную графику.
+  </footer>
+</body>
+</html>

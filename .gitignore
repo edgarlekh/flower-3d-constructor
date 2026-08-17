@@ -1,0 +1,18 @@
+# Исходники моделей и фото — не деплоятся и не хранятся в репозитории
+data/
+
+# Python-окружение для скриптов (scripts/)
+scripts/venv/
+scripts/.venv/
+__pycache__/
+*.pyc
+
+# Системные и редакторские файлы
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Логи и временное
+*.log
+node_modules/
