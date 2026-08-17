@@ -19,6 +19,7 @@
 <div id="tools">
   <button id="add" class="primary">+ Копия букета</button>
   <button id="remove">Убрать</button>
+  <button id="clear">Очистить стол</button>
   <button id="reset">Вернуть вид</button>
 </div>
 
@@ -48,12 +49,16 @@
 (function(){
   // --- какой букет ставим: из конструктора (localStorage) или запасной ---
   const DEFAULT = { cart:{red:5, gros:3, euc:4, gyp:3}, vaseId:'tall', variantSeed:0, manual:{} };
-  let saved;
-  try { saved = JSON.parse(localStorage.getItem('flowerBouquet')); } catch(_){}
-  const spec = saved && saved.cart ? saved : DEFAULT;
-  // manual: {key:[x,y,z]} -> {key:Vector3}
-  const manual = {};
-  if (spec.manual) for (const k in spec.manual){ const a = spec.manual[k]; manual[k] = new THREE.Vector3(a[0],a[1],a[2]); }
+  const HALL_KEY = 'flowerHall';        // сохранённая расстановка стола
+  const PENDING_KEY = 'flowerPending';  // букет, присланный из конструктора «на стол»
+
+  // spec.manual хранится как {key:[x,y,z]}; для сборщика нужен {key:Vector3}
+  function manualVec(specManual){
+    const m = {};
+    if (specManual) for (const k in specManual){ const a = specManual[k]; m[k] = new THREE.Vector3(a[0],a[1],a[2]); }
+    return m;
+  }
+  const readJSON = k => { try { return JSON.parse(localStorage.getItem(k)); } catch(_){ return null; } };
 
   const TABLE_R = 75, TABLE_H = 75;     // радиус 75 см (⌀150), высота 75 см
   const EDGE = TABLE_R - 16;            // букеты держим не у самого края
@@ -116,22 +121,25 @@
   }
 
   // --- букеты на столе ---
-  const bouquets = [];             // массив root-групп
-  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const bouquets = [];             // массив root-групп; у каждой userData.spec — свой букет
+  let currentSpec = DEFAULT;       // какой букет копируем кнопкой «+ Копия»
 
-  function placeBouquet(x, z){
-    const res = window.BouquetBuilder.build(spec.cart, spec.vaseId, spec.variantSeed, { manual });
+  // Поставить букет по спецификации spec в точку (x,z). spec.manual — {key:[x,y,z]}.
+  function placeBouquet(spec, x, z){
+    const res = window.BouquetBuilder.build(spec.cart, spec.vaseId, spec.variantSeed, { manual: manualVec(spec.manual) });
     if (!res.flowerGroups.length && !res.vase){ return null; }
     const root = res.root;
     root.position.set(x, TABLE_H, z);
+    root.userData.spec = spec;              // храним спецификацию для сохранения
     root.userData.grow = 0;                 // мягкое появление
     root.scale.setScalar(0.001);
     scene.add(root); bouquets.push(root);
+    currentSpec = spec;
     updateReadout();
     return root;
   }
 
-  // разложить копии по кольцу на столе
+  // разложить очередную копию по кольцу на столе (свободное место)
   function nextSpot(){
     const n = bouquets.length;
     if (n === 0) return [0, 0];
@@ -143,6 +151,12 @@
   function updateReadout(){
     document.getElementById('count').textContent = bouquets.length;
     document.getElementById('empty').style.display = bouquets.length ? 'none' : 'grid';
+  }
+
+  // Сохранить всю расстановку стола (спеки + позиции), чтобы не терялась при уходе.
+  function saveHall(){
+    const items = bouquets.map(b => ({ spec: b.userData.spec, x: +b.position.x.toFixed(2), z: +b.position.z.toFixed(2) }));
+    try { localStorage.setItem(HALL_KEY, JSON.stringify(items)); } catch(_){}
   }
 
   // держим букет на столешнице: не даём уехать за край
@@ -161,13 +175,19 @@
     setCameraPaused: (v) => cam.setPaused(v),
     moveTo: moveBouquet,
     onGrab: (g) => { g.userData.lift = true; document.getElementById('hint').classList.add('gone'); },
-    onRelease: (g) => { g.userData.lift = false; },
+    onRelease: (g) => { g.userData.lift = false; saveHall(); },   // сохраняем новую позицию
   });
 
   // --- кнопки ---
-  document.getElementById('add').addEventListener('click', () => { const [x,z] = nextSpot(); placeBouquet(x, z); });
+  document.getElementById('add').addEventListener('click', () => {
+    const [x,z] = nextSpot(); placeBouquet(currentSpec, x, z); saveHall();
+  });
   document.getElementById('remove').addEventListener('click', () => {
-    const g = bouquets.pop(); if (g) scene.remove(g); updateReadout();
+    const g = bouquets.pop(); if (g) scene.remove(g); updateReadout(); saveHall();
+  });
+  document.getElementById('clear').addEventListener('click', () => {
+    while (bouquets.length){ scene.remove(bouquets.pop()); }
+    updateReadout(); saveHall();
   });
   document.getElementById('reset').addEventListener('click', () => cam.frame(FOCUS, FIT, false));
 
@@ -188,13 +208,28 @@
     renderer.render(scene, camera);
   }
 
-  // --- старт ---
+  // --- старт: восстановить стол, добавить присланный из конструктора букет ---
   resize(); frameScene();
-  placeBouquet(0, 0);            // первый букет по центру стола
+
+  // 1) восстанавливаем сохранённую расстановку
+  const savedHall = readJSON(HALL_KEY);
+  if (Array.isArray(savedHall)) savedHall.forEach(it => { if (it && it.spec) placeBouquet(it.spec, it.x || 0, it.z || 0); });
+
+  // 2) если из конструктора прислали букет «на стол» — добавляем его и чистим «входящее»
+  const pending = readJSON(PENDING_KEY);
+  if (pending && pending.cart){
+    const [x,z] = nextSpot(); placeBouquet(pending, x, z);
+    localStorage.removeItem(PENDING_KEY);
+  }
+
+  // 3) совсем пусто (первый визит) — ставим запасной букет по центру
+  if (!bouquets.length) placeBouquet(DEFAULT, 0, 0);
+
+  saveHall();
   tick();
 
   // отладочный хук
-  window.hallDebug = { scene, camera, cam, bouquets, placeBouquet, moveBouquet, drag, TABLE_R, TABLE_H, EDGE, spec };
+  window.hallDebug = { scene, camera, cam, bouquets, placeBouquet, moveBouquet, saveHall, drag, TABLE_R, TABLE_H, EDGE, currentSpec };
 })();
 </script>
 </body>

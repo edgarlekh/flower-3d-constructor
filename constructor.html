@@ -53,7 +53,7 @@
         <span class="label">Итого</span>
         <b id="p-total">0<small> zł</small></b>
       </div>
-      <button id="tohall">Поставить на стол →</button>
+      <button id="tohall">Добавить на стол →</button>
     </div>
   </section>
 
@@ -205,10 +205,11 @@
   document.getElementById('relayout').addEventListener('click', () => rebuild());   // вернуть авто-раскладку
   document.getElementById('reset').addEventListener('click', () => cam.frame(FOCUS, FIT, false));
 
-  // Перенести собранный букет (состав + ваза + ручная раскладка) в зал.
+  // Добавить собранный букет (состав + ваза + ручная раскладка) на стол в зале.
+  // Пишем во «входящее» — зал добавит его к уже стоящим, ничего не сбрасывая.
   document.getElementById('tohall').addEventListener('click', () => {
     const m = {}; for (const k in manual){ const v = manual[k]; m[k] = [v.x, v.y, v.z]; }
-    localStorage.setItem('flowerBouquet', JSON.stringify({
+    localStorage.setItem('flowerPending', JSON.stringify({
       cart: state.cart, vaseId: state.vaseId, variantSeed: state.variantSeed, manual: m,
     }));
     location.href = 'hall.html';
