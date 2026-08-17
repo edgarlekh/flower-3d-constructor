@@ -1,38 +1,244 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Конструктор букета — скоро</title>
-  <link rel="stylesheet" href="assets/css/styles.css">
-  <style>
-    .soon {
-      min-height: 100svh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      padding: 48px 20px;
-      gap: 24px;
-    }
-    h1 { font-size: clamp(28px, 6vw, 44px); margin: 0; }
-    p { color: var(--muted); font-size: 18px; max-width: 32ch; margin: 0; }
-    .steps { color: var(--muted); font-size: 14px; text-align: left; max-width: 34ch; }
-    .steps li { margin: 6px 0; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Конструктор букета</title>
+<link rel="stylesheet" href="assets/css/constructor.css">
 </head>
 <body>
-  <main class="soon">
-    <div class="badge" style="color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-size:13px;">Этап 1 в работе</div>
-    <h1>Конструктор букета — скоро</h1>
-    <p>Здесь будет 3D-сборка букета с каталогом-корзиной и живой сметой.</p>
-    <ol class="steps">
-      <li>Этап 1 — перенос конструктора из прототипа</li>
-      <li>Этап 2 — перетаскивание цветов руками</li>
-      <li>Этап 3 — пополнение каталога</li>
-    </ol>
-    <a class="btn btn-ghost" href="index.html">← На главную</a>
-  </main>
+<div id="app">
+
+  <section id="catalog">
+    <div class="head">
+      <a class="back" href="index.html">← На главную</a>
+      <div class="label" style="margin-top:8px">Прототип · логика, не графика</div>
+      <h1 class="serif">Конструктор букета</h1>
+      <p>Наберите стебли, как в корзине. Букет, ваза и цена собираются сами. Красная роза — настоящая модель с вашей фотографии.</p>
+    </div>
+    <div id="vasebox">
+      <div class="group-title"><span class="label">Ваза</span><span class="label" style="letter-spacing:0;text-transform:none;font-weight:400">модели с фото</span></div>
+      <div id="vaselist"></div>
+    </div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <section id="stage">
+    <div id="tools"><button id="variant">Другой вариант укладки</button><button id="reset">Вернуть вид</button></div>
+    <div id="empty">
+      <div>
+        <div class="serif">Пусто</div>
+        <p>Добавьте первый стебель слева</p>
+      </div>
+    </div>
+    <div id="hint" class="label">Палец — поворот · два пальца — зум и сдвиг · двойное касание — сброс</div>
+  </section>
+
+  <section id="recipe">
+    <div class="rec-scroll">
+      <div class="spec">
+        <div><span class="label">Диаметр</span><b id="dia">—</b></div>
+        <div><span class="label">Форма</span><b id="form" style="font-size:13px;line-height:1.35">—</b></div>
+      </div>
+      <div class="label">Состав</div>
+      <div class="stems" id="stems" style="margin-top:8px"></div>
+      <div id="notes"></div>
+    </div>
+    <div class="total">
+      <div class="tl"><span>Цветы и зелень</span><span id="p-flowers">0 zł</span></div>
+      <div class="tl" id="r-vase" style="display:none"><span>Ваза</span><span id="p-vase">0 zł</span></div>
+      <div class="tl"><span>Упаковка и лента</span><span id="p-wrap">0 zł</span></div>
+      <div class="tl"><span>Работа флориста</span><span id="p-labor">0 zł</span></div>
+      <div class="grand">
+        <span class="label">Итого</span>
+        <b id="p-total">0<small> zł</small></b>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- 1) движок three.js -->
+<script src="assets/js/three.min.js"></script>
+<!-- 2) данные: каталог и упакованные модели -->
+<script src="assets/catalog/catalog.js"></script>
+<script src="assets/catalog/models/vases.js"></script>
+<script src="assets/catalog/models/rose.js"></script>
+<!-- 3) логика в модулях -->
+<script src="assets/js/model-loader.js"></script>
+<script src="assets/js/bouquet-engine.js"></script>
+<script src="assets/js/camera-controls.js"></script>
+<script src="assets/js/catalog-render.js"></script>
+
+<!-- 4) склейка: сцена, пересборка букета, запуск -->
+<script>
+(function(){
+  const {layout, cartSeed, mulberry32, GOLDEN} = window.BouquetEngine;
+  const VASES = window.CATALOG && window.VASES;
+
+  // --- состояние приложения ---
+  const state = { cart:{}, vaseId:'none', variantSeed:0 };
+
+  // --- сцена ---
+  const stage = document.getElementById('stage');
+  const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  stage.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(38, 1, .05, 800);
+  scene.add(new THREE.HemisphereLight(0xFFFFFF, 0xD8D4CC, .62));
+  const key = new THREE.DirectionalLight(0xFFF7EE, 1.05); key.position.set(45,80,55); scene.add(key);
+  const rim = new THREE.DirectionalLight(0xDCE6F2, .32); rim.position.set(-50,30,-45); scene.add(rim);
+
+  // мягкая тень-подложка
+  (function(){
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d').createRadialGradient(64,64,4,64,64,62);
+    g.addColorStop(0,'rgba(90,80,70,.30)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    const cx = c.getContext('2d'); cx.fillStyle = g; cx.fillRect(0,0,128,128);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(120,120),
+      new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c), transparent:true, depthWrite:false}));
+    m.rotation.x = -Math.PI/2; m.position.y = -.6; scene.add(m);
+  })();
+
+  const bouquet = new THREE.Group(); scene.add(bouquet);
+  const vaseGroup = new THREE.Group(); scene.add(vaseGroup);
+  const stemGeo = new THREE.CylinderGeometry(.32,.4,1,6);
+  const stemMat = new THREE.MeshStandardMaterial({color:0x4C6B4A, roughness:.85});
+  const UP = new THREE.Vector3(0,1,0);
+  const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // кадрирование: обновляется при каждой пересборке
+  let FOCUS = new THREE.Vector3(0,32,0), FIT = 110, firstBuild = true, growT = 1;
+
+  // --- камера ---
+  const cam = window.createCameraControls(camera, renderer.domElement, {
+    onInteract: () => document.getElementById('hint').classList.add('gone'),
+    onReset: () => cam.frame(FOCUS, FIT, false),
+  });
+
+  // --- UI каталога ---
+  const ui = window.CatalogUI.init(state, { onChange: rebuild });
+
+  function drawVase(){
+    while (vaseGroup.children.length) vaseGroup.remove(vaseGroup.children[0]);
+    const V = window.VASES.find(v => v.id === state.vaseId);
+    if (!V || !V.height_cm || !window.ModelLoader.vaseAssets[V.model]) return null;
+    const A = window.ModelLoader.vaseAssets[V.model];
+    const m = new THREE.Mesh(A.geo, A.mat);
+    m.scale.setScalar(V.height_cm);
+    vaseGroup.add(m);
+    return {V, A};
+  }
+
+  function rebuild(){
+    while (bouquet.children.length) bouquet.remove(bouquet.children[0]);
+    const vase = drawVase();
+    const {stems, s} = layout(state.cart, state.vaseId, state.variantSeed);
+    const rnd = mulberry32(cartSeed(state.cart, state.variantSeed) + 11);
+    // Точка выхода стеблей: в вазе — устье горловины, иначе — рука.
+    const ORIGIN = vase ? new THREE.Vector3(0, vase.V.height_cm*0.95, 0) : new THREE.Vector3(0,0,0);
+    const NECK = vase ? vase.A.neck*vase.V.height_cm*0.72 : 0;
+    const stemParts = [];
+    stems.forEach((st, idx) => {
+      const base = ORIGIN.clone();
+      if (vase){
+        // низ стебля слегка расходится внутри горловины — как в жизни
+        const a = idx*GOLDEN, rr = NECK*Math.sqrt((idx+0.5)/stems.length);
+        base.x += Math.cos(a)*rr; base.z += Math.sin(a)*rr;
+        // колено чуть выше среза: ниже него стебель идёт вертикально
+        const knee = new THREE.Vector3(base.x, vase.V.height_cm*1.06, base.z);
+        [[base,knee],[knee,st.pos]].forEach(([p0,p1]) => {
+          const v = p1.clone().sub(p0), L = v.length();
+          if (L < 0.01) return;
+          const d = v.clone().normalize();
+          const m = new THREE.Mesh(stemGeo, stemMat);
+          m.scale.y = L;
+          m.quaternion.setFromUnitVectors(UP, d);
+          m.position.copy(p0).addScaledVector(d, L*0.5);
+          stemParts.push(m);
+        });
+        base.copy(knee);
+      }
+      const vec = st.pos.clone().sub(base);
+      const len = vec.length();
+      const dir = vec.clone().normalize();
+      const q = new THREE.Quaternion().setFromUnitVectors(UP, dir);
+
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.scale.y = vase ? 0.001 : len; stem.quaternion.copy(q);
+      stem.position.copy(base).addScaledVector(dir, len*0.5);
+
+      const head = window.ModelLoader.bloomMesh(st.item, rnd);
+      head.position.copy(st.pos); head.quaternion.copy(q);
+
+      const g = new THREE.Group();
+      while (stemParts.length) g.add(stemParts.pop());
+      g.add(stem); g.add(head);
+      g.userData.delay = idx*0.012; g.scale.setScalar(REDUCED ? 1 : 0.001);
+      bouquet.add(g);
+    });
+
+    // Кадрируем по реальным габаритам сцены, а не на глаз.
+    if (stems.length || vase){
+      let lo = 1e9, hi = -1e9, rad = 0;
+      stems.forEach(st => {
+        const b = (st.item.bloom_cm||6)*0.6;
+        lo = Math.min(lo, st.pos.y-b); hi = Math.max(hi, st.pos.y+b);
+        rad = Math.max(rad, Math.hypot(st.pos.x, st.pos.z)+b);
+      });
+      if (vase){
+        lo = Math.min(lo, 0); hi = Math.max(hi, vase.V.height_cm);
+        rad = Math.max(rad, vase.V.height_cm*vase.A.w*0.5);
+      }
+      if (lo > hi){ lo = 0; hi = 20; }
+      FOCUS.set(0, (lo+hi)/2, 0);
+      const R = Math.max(Math.hypot(rad, (hi-lo)/2), 6);
+      const fov = camera.fov*Math.PI/180;
+      const vFit = R/Math.sin(fov/2);
+      const hFit = R/Math.sin(2*Math.atan(Math.tan(fov/2)*Math.max(camera.aspect, 0.4))/2);
+      FIT = Math.max(vFit, hFit)*1.12;
+      cam.frame(FOCUS, FIT, !firstBuild);
+      firstBuild = false;
+    }
+    document.getElementById('empty').style.display = (s.n || vase) ? 'none' : 'grid';
+    document.getElementById('tools').style.display = (s.n || vase) ? 'flex' : 'none';
+    document.getElementById('hint').style.display = s.n ? 'block' : 'none';
+    growT = 0;
+    ui.renderRecipe(s);
+  }
+
+  function resize(){
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h); camera.aspect = w/h; camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize);
+
+  function tick(){
+    requestAnimationFrame(tick);
+    if (growT < 1){
+      growT = Math.min(1, growT + .02);
+      bouquet.children.forEach(g => {
+        const t = Math.max(0, Math.min(1, (growT - g.userData.delay)/.35));
+        g.scale.setScalar(t <= 0 ? 0.001 : 1 - Math.pow(1-t, 3));
+      });
+    }
+    cam.updateInertia();
+    renderer.render(scene, camera);
+  }
+
+  // --- кнопки сцены ---
+  document.getElementById('variant').addEventListener('click', () => { state.variantSeed++; rebuild(); });
+  document.getElementById('reset').addEventListener('click', () => cam.frame(FOCUS, FIT, false));
+
+  // --- старт: тот самый пример ---
+  state.cart.red = 3; state.cart.tul = 2; state.cart.eus = 3;
+  ui.drawAll(); resize(); cam.place(); rebuild(); tick();
+})();
+</script>
 </body>
 </html>
