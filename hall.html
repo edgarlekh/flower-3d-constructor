@@ -488,7 +488,23 @@
       if(dragSnap && dragSnap!==snapshot()) pushSnap(dragSnap); dragSnap=null;
       hideGuides(); clearDims(); updateReadout(); saveHall(); renderWarnings();
     },
-    onClick: (o) => { if(o && o.userData.kind==='bouquet') openBouquetMenu(o); },   // клик без движения — меню
+  });
+
+  // Правая кнопка по букету — контекст-меню (левая двигает).
+  let rdown = null;
+  renderer.domElement.addEventListener('pointerdown', e=>{ if(e.button===2) rdown={x:e.clientX,y:e.clientY}; });
+  renderer.domElement.addEventListener('contextmenu', e=>{
+    e.preventDefault();
+    if(mode!=='edit' || viewOnly){ closeMenu(); return; }
+    const moved = rdown && Math.hypot(e.clientX-rdown.x, e.clientY-rdown.y) > 6; rdown=null;
+    if(moved){ return; }                     // это была панорама правой кнопкой — не меню
+    const r=rect(); const crc=new THREE.Raycaster(), cnd=new THREE.Vector2();
+    cnd.x=((e.clientX-r.left)/r.width)*2-1; cnd.y=-((e.clientY-r.top)/r.height)*2+1;
+    crc.setFromCamera(cnd, camera);
+    const hits=crc.intersectObjects(pickables(), true);
+    // среди попаданий предпочитаем букет (скатерть может быть спереди)
+    let bq=null; for(const h of hits){ let o=h.object; while(o && !(o.userData&&o.userData.table)) o=o.parent; if(o && o.userData.kind==='bouquet'){ bq=o; break; } }
+    if(bq){ selectTable(bq.userData.table); openBouquetMenu(bq, e); } else closeMenu();
   });
 
   // Меню по клику на букет: дублировать / изменить / удалить.

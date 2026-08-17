@@ -43,6 +43,7 @@ window.createFlowerDrag = function(camera, el, opts){
   }
 
   el.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;              // только левая кнопка двигает (правая — меню/камера)
     if (active || (opts.canGrab && !opts.canGrab())) return;
     const g = pick(e);
     if (!g) return;                          // мимо цветка — пусть работает камера
