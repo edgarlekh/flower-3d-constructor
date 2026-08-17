@@ -18,6 +18,7 @@ window.createCameraControls = function(camera, el, opts){
   const DMIN = opts.distMin || 3.5, DMAX = opts.distMax || 300;
   const PAN_R = opts.panRadius || 40;              // насколько далеко можно увести центр обзора
   const PAN_Y = opts.panY || [-10, 120];           // пределы высоты центра
+  const POL = opts.polRange || [.30, 1.70];        // наклон: меньше — вид сверху
   const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
 
   let az = .7, pol = 1.28, dist = 110;
@@ -69,7 +70,7 @@ window.createCameraControls = function(camera, el, opts){
       const base = Math.max(220, Math.min(el.clientWidth, el.clientHeight));
       const k = Math.PI*1.6/base;      // проводишь через экран — примерно полоборота
       vaz = -dx*k; vpol = -dy*k*0.7;   // по вертикали мягче, чтобы не заваливать
-      az += vaz; pol = clamp(pol + vpol, .30, 1.70);
+      az += vaz; pol = clamp(pol + vpol, POL[0], POL[1]);
       place();
     } else if (ptrs.size === 2){
       const a = [...ptrs.values()];
@@ -105,7 +106,7 @@ window.createCameraControls = function(camera, el, opts){
 
   function updateInertia(){
     if (!ptrs.size && (Math.abs(vaz) > 1e-4 || Math.abs(vpol) > 1e-4)){
-      az += vaz; pol = clamp(pol + vpol, .30, 1.70); vaz *= .86; vpol *= .86; place();
+      az += vaz; pol = clamp(pol + vpol, POL[0], POL[1]); vaz *= .86; vpol *= .86; place();
     }
   }
 

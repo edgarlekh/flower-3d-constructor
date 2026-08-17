@@ -84,22 +84,42 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 }
 #tools > button#reset:hover{border-color:var(--accent);color:var(--accent)}
 
-/* предупреждения «тесно/не влезает» */
-#warnings{position:fixed;left:12px;bottom:14px;z-index:3;max-width:350px;display:flex;flex-direction:column;gap:8px}
-#warnings .warn{
-  display:flex;gap:10px;align-items:flex-start;
-  border:1px solid #ecd6a6;background:var(--ui);backdrop-filter:blur(12px);
-  border-radius:13px;padding:10px 13px;font-size:12.5px;line-height:1.45;color:#6b5b34;box-shadow:var(--ui-shadow);
+/* левая панель: стол · размеры · внимание (сворачиваемая) */
+#panel{
+  position:fixed;left:12px;top:74px;z-index:3;width:238px;color:var(--ui-text);
+  background:var(--ui);backdrop-filter:blur(12px);border:1px solid var(--ui-line);
+  border-radius:15px;box-shadow:var(--ui-shadow);overflow:hidden;
 }
-#warnings .warn::before{content:"!";flex:none;width:19px;height:19px;border-radius:50%;background:#e7b955;color:#4a3a12;font-weight:800;font-size:12px;display:grid;place-items:center;margin-top:1px}
-#warnings .warn strong{color:#8a6a1e}
+#panel .phead{
+  display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;
+  padding:10px 13px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ui-muted);font-weight:700;
+}
+#panel .phead:hover{color:var(--accent)}
+#panel .chev{font-size:12px}
+#panel .pbody{padding:2px 13px 13px;display:flex;flex-direction:column;gap:13px;max-height:66vh;overflow:auto}
+#panel.collapsed .pbody{display:none}
+.psec:empty{display:none}
+.ptitle{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ui-muted);font-weight:700;margin-bottom:6px}
+.pbig{font-size:15px;font-weight:700;color:var(--ui-text)}
+.pmuted{color:var(--ui-muted);font-size:13px}
+.prow{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12.5px;padding:3px 0}
+.prow span{color:var(--ui-muted)}
+.prow b{font-variant-numeric:tabular-nums;color:var(--ui-text)}
+.prow.warn b{color:#c0553f}
+#p-warn .warn{
+  display:flex;gap:9px;align-items:flex-start;border:1px solid #ecd6a6;background:rgba(231,185,85,.12);
+  border-radius:11px;padding:8px 10px;font-size:12px;line-height:1.42;color:#6b5b34;margin-top:6px;
+}
+#p-warn .warn::before{content:"!";flex:none;width:17px;height:17px;border-radius:50%;background:#e7b955;color:#4a3a12;font-weight:800;font-size:11px;display:grid;place-items:center;margin-top:1px}
+#p-warn .warn strong{color:#8a6a1e}
 
-/* рулетка при перетаскивании */
-#ruler{
+/* живые размеры при перетаскивании */
+#dims .dim{
   position:fixed;z-index:4;transform:translate(-50%,-50%);pointer-events:none;display:none;
   background:#3a352f;color:#fff;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;
-  padding:4px 10px;border-radius:999px;box-shadow:0 5px 14px rgba(0,0,0,.28);white-space:nowrap;
+  padding:3px 9px;border-radius:999px;box-shadow:0 5px 14px rgba(0,0,0,.28);white-space:nowrap;
 }
+#dims .dim.warn{background:#c0553f}
 
 /* подсказка — тонкая пилюля по центру */
 #hint{

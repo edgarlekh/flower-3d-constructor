@@ -32,8 +32,16 @@
   <button id="reset">Показать все</button>
 </div>
 
-<div id="warnings"></div>
-<div id="ruler"></div>
+<aside id="panel">
+  <div class="phead" id="panel-head"><span>Стол · размеры</span><span class="chev">▾</span></div>
+  <div class="pbody">
+    <div class="psec" id="p-table"></div>
+    <div class="psec" id="p-gaps"></div>
+    <div class="psec" id="p-warn"></div>
+  </div>
+</aside>
+
+<div id="dims"></div>
 
 <div id="empty" style="display:none">
   <div>
@@ -42,7 +50,7 @@
   </div>
 </div>
 
-<div id="hint" class="label">Тяните букет/тарелку — по столу · пустую скатерть — двигаете весь стол · пустое место — поворот</div>
+<div id="hint" class="label">Тяните букет/тарелку — по столу · скатерть — двигаете стол · двойной клик по столу — подлететь · колесо — зум</div>
 <div id="loader" class="scene-loader"><div class="spin"></div>Накрываем столы…</div>
 
 <script src="assets/js/three.min.js"></script>
@@ -62,9 +70,13 @@
   const readJSON = k => { try { return JSON.parse(localStorage.getItem(k)); } catch(_){ return null; } };
   const manualVec = m => { const o={}; if(m) for(const k in m){ const a=m[k]; o[k]=new THREE.Vector3(a[0],a[1],a[2]); } return o; };
 
-  // размеры (реальные см)
-  const TABLE_R = 75, TABLE_H = 75, TABLE_TOP = TABLE_H + 0.7;
-  const PLATE_R = TABLE_R - 16, PLATE_RAD = 13.5, CHAIR_R = TABLE_R + 22;
+  // размеры (реальные см) — берутся из каталога (window.TABLES / window.TABLEWARE)
+  const TCFG = (window.TABLES && window.TABLES[0]) || {diameter_cm:150, height_cm:75, seats_default:6};
+  const TW = window.TABLEWARE || {plate_cm:27, chair_cm:45};
+  const TABLE_R = TCFG.diameter_cm/2, TABLE_H = TCFG.height_cm, TABLE_TOP = TABLE_H + 0.7;
+  const SEATS_DEFAULT = TCFG.seats_default || 6;
+  const PLATE_RAD = TW.plate_cm/2, PLATE_R = TABLE_R - 16, CHAIR_R = TABLE_R + 22;
+  const CHAIR_OUTER = CHAIR_R + Math.round((TW.chair_cm||45)/2);   // задняя кромка стула (проход между столами)
   const ITEM_EDGE = TABLE_R - 6;         // предметы держим на столешнице
   const FLOOR_R = 520;                    // столы не уходят за пол
   const TABLE_GAP = TABLE_R * 2 + 110;    // шаг сетки столов
@@ -93,38 +105,91 @@
     new THREE.MeshStandardMaterial({color:0x9CB08A, roughness:.6, emissive:0x2c3a22}));
   selRing.rotation.x = -Math.PI/2; selRing.position.y = 0.6; selRing.visible = false; scene.add(selRing);
 
-  // рулетка: линия + подпись расстояния при перетаскивании
-  const rulerGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-  const rulerLine = new THREE.Line(rulerGeo, new THREE.LineBasicMaterial({color:0xB8737E}));
-  rulerLine.visible = false; scene.add(rulerLine);
-  const rulerLabel = document.getElementById('ruler');
-  function hideRuler(){ rulerLine.visible=false; rulerLabel.style.display='none'; }
-  function updateRuler(obj){
-    let a=null, b=null, cm=0, text='';
-    const wa=new THREE.Vector3();
-    if (obj.userData.kind === 'table'){
-      const t=obj.userData.table; let best=Infinity, bt=null;
-      tables.forEach(o=>{ if(o===t) return; const d=Math.hypot(o.position.x-t.position.x,o.position.z-t.position.z); if(d<best){best=d;bt=o;} });
-      if(!bt){ hideRuler(); return; }
-      a=new THREE.Vector3(t.position.x,TABLE_H+8,t.position.z);
-      b=new THREE.Vector3(bt.position.x,TABLE_H+8,bt.position.z);
-      cm=Math.max(0, Math.round(best - 2*TABLE_R)); text=`между столами: ${cm} см`;
-    } else {
-      const t=obj.userData.table; obj.getWorldPosition(wa);
-      const siblings=[...t.userData.bouquets.children, ...t.userData.settings.children.filter(c=>c.userData.kind==='setting')].filter(o=>o!==obj);
-      let best=Infinity, bo=null; const wb=new THREE.Vector3();
-      siblings.forEach(o=>{ o.getWorldPosition(wb); const d=wa.distanceTo(wb); if(d<best){best=d;bo=o.clone();bo.position.copy(wb);} });
-      a=wa.clone();
-      if(bo){ b=bo.position.clone(); cm=Math.round(best); text=`до соседа: ${cm} см`; }
-      else { b=new THREE.Vector3(t.position.x,wa.y,t.position.z); cm=Math.round(a.distanceTo(b)); text=`от центра: ${cm} см`; }
+  // === ЖИВЫЕ РАЗМЕРЫ (для декоратора) ===
+  // Пул линий + DOM-подписей. При перетаскивании показываем реальные зазоры в см.
+  const DIM_N = 4, dimLines = [], dimEls = [];
+  const dimsWrap = document.getElementById('dims'), sizesWrap = document.getElementById('sizes');
+  const rect = () => renderer.domElement.getBoundingClientRect();
+  const projScreen = (v) => { const p=v.clone().project(camera), r=rect(); return {x:r.left+(p.x*.5+.5)*r.width, y:r.top+(-p.y*.5+.5)*r.height}; };
+  for (let i=0;i<DIM_N;i++){
+    const ln=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]), new THREE.LineBasicMaterial({color:0xB8737E}));
+    ln.visible=false; scene.add(ln); dimLines.push(ln);
+    const el=document.createElement('div'); el.className='dim'; dimsWrap.appendChild(el); dimEls.push(el);
+  }
+  function renderDims(dims){
+    for (let i=0;i<DIM_N;i++){
+      const d=dims[i];
+      if(!d){ dimLines[i].visible=false; dimEls[i].style.display='none'; continue; }
+      dimLines[i].geometry.setFromPoints([d.a,d.b]); dimLines[i].geometry.attributes.position.needsUpdate=true;
+      dimLines[i].material.color.set(d.warn?0xC0553F:0xB8737E); dimLines[i].visible=true;
+      const s=projScreen(d.a.clone().lerp(d.b,.5)), el=dimEls[i];
+      el.style.display='block'; el.style.left=s.x+'px'; el.style.top=s.y+'px';
+      el.textContent=d.text; el.classList.toggle('warn', !!d.warn);
     }
-    rulerGeo.setFromPoints([a,b]); rulerGeo.attributes.position.needsUpdate=true; rulerLine.visible=true;
-    const mid=a.clone().lerp(b,0.5).project(camera);
-    const rect=renderer.domElement.getBoundingClientRect();
-    rulerLabel.style.display='block';
-    rulerLabel.style.left=(rect.left+(mid.x*0.5+0.5)*rect.width)+'px';
-    rulerLabel.style.top=(rect.top+(-mid.y*0.5+0.5)*rect.height)+'px';
-    rulerLabel.textContent=text;
+  }
+  const clearDims = () => renderDims([]);
+
+  // Какие размеры показать для перетаскиваемого объекта.
+  function computeDims(obj){
+    const t=obj.userData.table, dims=[], wa=new THREE.Vector3(); obj.getWorldPosition(wa);
+    if (obj.userData.kind === 'table'){
+      let best=Infinity,bt=null; tables.forEach(o=>{ if(o===t)return; const d=Math.hypot(o.position.x-t.position.x,o.position.z-t.position.z); if(d<best){best=d;bt=o;} });
+      if(bt){ const gap=Math.round(best-2*CHAIR_OUTER);
+        dims.push({a:new THREE.Vector3(t.position.x,TABLE_H+8,t.position.z), b:new THREE.Vector3(bt.position.x,TABLE_H+8,bt.position.z), text:`проход между стульями: ${gap} см`, warn:gap<40}); }
+      return dims;
+    }
+    const lx=obj.position.x, lz=obj.position.z, rad=Math.hypot(lx,lz), fp=obj.userData.footprint||6;
+    // до края стола
+    const dl=rad||1, ex=t.position.x+lx/dl*TABLE_R, ez=t.position.z+lz/dl*TABLE_R, edge=Math.round(TABLE_R-rad-fp);
+    dims.push({a:wa.clone(), b:new THREE.Vector3(ex,wa.y,ez), text:`до края: ${edge} см`, warn:edge<0});
+    // до ближайшей тарелки
+    const sets=t.userData.settings.children.filter(c=>c.userData.kind==='setting');
+    let bd=Infinity,bs=null; sets.forEach(s=>{ const d=Math.hypot(lx-s.position.x,lz-s.position.z); if(d<bd){bd=d;bs=s;} });
+    if(bs){ const wb=new THREE.Vector3(); bs.getWorldPosition(wb); const gap=Math.round(bd-fp-PLATE_RAD);
+      dims.push({a:wa.clone(), b:wb, text:`до тарелки: ${gap} см`, warn:gap<0}); }
+    // до ближайшего соседнего букета
+    if(obj.userData.kind==='bouquet'){
+      const others=t.userData.bouquets.children.filter(o=>o!==obj);
+      let b2=Infinity,bo=null; others.forEach(o=>{ const d=Math.hypot(lx-o.position.x,lz-o.position.z); if(d<b2){b2=d;bo=o;} });
+      if(bo){ const wo=new THREE.Vector3(); bo.getWorldPosition(wo); const gap=Math.round(b2-fp-(bo.userData.footprint||6));
+        dims.push({a:wa.clone(), b:wo, text:`до букета: ${gap} см`, warn:gap<0}); }
+    }
+    return dims;
+  }
+
+  // Левая панель: размеры выбранного стола, зазоры и предупреждения.
+  const prow = (label, cm, warn) => `<div class="prow ${warn?'warn':''}"><span>${label}</span><b>${cm} см</b></div>`;
+  function updatePanel(){
+    const t = selected;
+    document.getElementById('p-table').innerHTML = t
+      ? `<div class="ptitle">Выбранный стол</div><div class="pbig">⌀ ${TABLE_R*2} см · ${t.userData.seats} гост.</div>`
+      : '<div class="pmuted">Стол не выбран</div>';
+    // зазоры
+    let gaps = '';
+    if (t){
+      let best=Infinity; tables.forEach(o=>{ if(o===t)return; best=Math.min(best, Math.hypot(o.position.x-t.position.x, o.position.z-t.position.z)); });
+      if (best<Infinity) gaps += prow('Проход до соседнего стола', Math.round(best-2*CHAIR_OUTER), (best-2*CHAIR_OUTER)<40);
+      const bqs=t.userData.bouquets.children, sets=t.userData.settings.children.filter(c=>c.userData.kind==='setting');
+      let bp=Infinity; bqs.forEach(b=>{ const fp=b.userData.footprint||12; sets.forEach(s=>{ bp=Math.min(bp, Math.hypot(b.position.x-s.position.x,b.position.z-s.position.z)-fp-PLATE_RAD); }); });
+      if (bp<Infinity) gaps += prow('Букет до тарелки (мин.)', Math.round(bp), bp<0);
+      let be=Infinity; bqs.forEach(b=>{ const fp=b.userData.footprint||12; be=Math.min(be, TABLE_R-Math.hypot(b.position.x,b.position.z)-fp); });
+      if (be<Infinity) gaps += prow('Букет до края (мин.)', Math.round(be), be<0);
+    }
+    document.getElementById('p-gaps').innerHTML = gaps ? `<div class="ptitle">Зазоры</div>${gaps}` : '';
+    // предупреждения
+    const w = computeWarnings(t);
+    if (tableOverlaps()) w.unshift(['Столы стоят вплотную', 'Стульям соседних столов не разойтись — раздвиньте столы (проход ≥ 40 см).']);
+    document.getElementById('p-warn').innerHTML = w.length
+      ? `<div class="ptitle">Внимание</div>` + w.map(x=>`<div class="warn"><strong>${x[0]}.</strong> ${x[1]}</div>`).join('')
+      : '';
+  }
+
+  // Подлёт камеры к конкретному столу (двойной клик).
+  function frameTable(t){
+    FOCUS.set(t.position.x, TABLE_H, t.position.z);
+    const R=Math.max(CHAIR_R+55, 90), fov=camera.fov*Math.PI/180;
+    const vFit=R/Math.sin(fov/2), hFit=R/Math.sin(2*Math.atan(Math.tan(fov/2)*Math.max(camera.aspect,0.4))/2);
+    FIT=Math.max(vFit,hFit)*1.05; cam.frame(FOCUS, FIT, false);
   }
 
   // --- общие геометрии/материалы ---
@@ -176,6 +241,7 @@
     panRadius: 2000,          // можно ездить по всему залу, а не только у центрального стола
     panY: [-10, 300],
     distMin: 30, distMax: 3500,
+    polRange: [.12, 1.74],    // почти вид сверху ... низкий угол
   });
   function frameAll(){
     let cx=0, cz=0; tables.forEach(t=>{ cx+=t.position.x; cz+=t.position.z; });
@@ -234,7 +300,7 @@
   function createTable(data){
     const t = new THREE.Group();
     t.position.set(data.x||0, 0, data.z||0);
-    t.userData = { kind:'table', seats: data.seats||6 };
+    t.userData = { kind:'table', seats: data.seats||SEATS_DEFAULT };
     const top=new THREE.Mesh(topGeo,woodMat); top.position.y=TABLE_H-2; t.add(top);
     const stem=new THREE.Mesh(stemGeo,woodMat); stem.position.y=(TABLE_H-4)/2; t.add(stem);
     const foot=new THREE.Mesh(footGeo,woodMat); foot.position.y=1.5; t.add(foot);
@@ -257,16 +323,25 @@
                  .map(s=>({ x:+s.position.x.toFixed(1), z:+s.position.z.toFixed(1), rot:+s.rotation.y.toFixed(3) })),
     };
   }
+  // Свободное место для нового стола: расширяющиеся кольца, без наложения на существующие.
   function freeSpot(){
-    const n = tables.length, cols = Math.max(1, Math.ceil(Math.sqrt(n+1)));
-    const col = n % cols, row = Math.floor(n / cols);
-    return [ (col - (cols-1)/2) * TABLE_GAP, (row - (cols-1)/2) * TABLE_GAP ];
+    const MIN = 2*CHAIR_OUTER + 45;             // центр-центр с проходом ≥ 45 см
+    if (!tables.length) return [0,0];
+    for (let ring=1; ring<10; ring++){
+      const R = ring*MIN, steps = Math.max(6, ring*6);
+      for (let k=0;k<steps;k++){
+        const a = k/steps*Math.PI*2 + ring*0.4, x=Math.cos(a)*R, z=Math.sin(a)*R;
+        if (tables.every(t => Math.hypot(t.position.x-x, t.position.z-z) >= MIN)) return [x,z];
+      }
+    }
+    return [tables.length*MIN, 0];
   }
 
   function selectTable(t){
     selected = t;
     if (t){ selRing.visible = true; selRing.position.set(t.position.x, 0.6, t.position.z); document.getElementById('guests').textContent = t.userData.seats; }
     else selRing.visible = false;
+    updatePanel();
   }
 
   // --- перетаскивание: что схватил, то и двигаем ---
@@ -290,7 +365,7 @@
       if (r>ITEM_EDGE){ lx*=ITEM_EDGE/r; lz*=ITEM_EDGE/r; }
       obj.position.x=lx; obj.position.z=lz;
     }
-    updateRuler(obj);
+    renderDims(computeDims(obj));
     renderWarnings();
   }
   const drag = window.createFlowerDrag(camera, renderer.domElement, {
@@ -301,8 +376,18 @@
     setCameraPaused: (v) => cam.setPaused(v),
     moveTo: onMove,
     onGrab: (o) => { selectTable(o.userData.table); document.getElementById('hint').classList.add('gone'); },
-    onRelease: () => { hideRuler(); updateReadout(); saveHall(); renderWarnings(); },
+    onRelease: () => { clearDims(); updateReadout(); saveHall(); renderWarnings(); },
   });
+
+  // Двойной клик по столу — камера подлетает к нему (легко переходить между столами).
+  const rc = new THREE.Raycaster(), nd = new THREE.Vector2();
+  renderer.domElement.addEventListener('dblclick', e => {
+    const r = rect(); nd.x=((e.clientX-r.left)/r.width)*2-1; nd.y=-((e.clientY-r.top)/r.height)*2+1;
+    rc.setFromCamera(nd, camera);
+    const hits = rc.intersectObjects(pickables(), true);
+    let o = hits.length ? hits[0].object : null; while(o && !(o.userData&&o.userData.table)) o=o.parent;
+    if (o && o.userData.table){ selectTable(o.userData.table); frameTable(o.userData.table); e.stopPropagation(); }
+  }, true);
 
   // --- проверки «влезает/тесно» для выбранного стола ---
   function computeWarnings(t){
@@ -329,19 +414,13 @@
   }
   // столы/стулья налезают друг на друга (по всему залу)
   function tableOverlaps(){
-    const bad = [];
     for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){
       const d = Math.hypot(tables[i].position.x-tables[j].position.x, tables[i].position.z-tables[j].position.z);
-      if (d < 2*CHAIR_R + 15) bad.push([i+1, j+1, Math.round(d)]);
+      if (d < 2*CHAIR_OUTER) return true;      // стулья соседних столов налезают
     }
-    return bad;
+    return false;
   }
-  function renderWarnings(){
-    const w = computeWarnings(selected);
-    const ov = tableOverlaps();
-    if (ov.length) w.unshift(['Столы стоят вплотную', `Стульям между столами не разойтись (нужно ≥ ${Math.round(2*CHAIR_R+15)} см между центрами). Раздвиньте столы.`]);
-    document.getElementById('warnings').innerHTML = w.map(x=>`<div class="warn"><strong>${x[0]}.</strong> ${x[1]}</div>`).join('');
-  }
+  const renderWarnings = () => updatePanel();   // всё в левой панели
 
   function totalBouquets(){ return tables.reduce((s,t)=>s+t.userData.bouquets.children.length,0); }
   function updateReadout(){
@@ -355,20 +434,21 @@
   }
 
   // --- кнопки ---
-  function afterChange(frame){ updateReadout(); renderWarnings(); saveHall(); if(frame) frameAll(); }
+  function afterChange(frame){ updateReadout(); renderWarnings(); saveHall();
+    if(frame==='all') frameAll(); else if(frame==='table' && selected) frameTable(selected); }
 
   document.getElementById('add-table').addEventListener('click', () => {
-    const [x,z]=freeSpot(); const t=createTable({x,z,seats:6,bouquets:[{spec:currentSpec,x:0,z:0}]});
-    selectTable(t); afterChange(true);
+    const [x,z]=freeSpot(); const t=createTable({x,z,seats:SEATS_DEFAULT,bouquets:[{spec:currentSpec,x:0,z:0}]});
+    selectTable(t); afterChange('table');        // подлетаем к новому столу
   });
   document.getElementById('copy-table').addEventListener('click', () => {
     if(!selected) return; const d=tableData(selected); const [x,z]=freeSpot();
-    const t=createTable(Object.assign({}, d, {x,z})); selectTable(t); afterChange(true);
+    const t=createTable(Object.assign({}, d, {x,z})); selectTable(t); afterChange('table');
   });
   document.getElementById('del-table').addEventListener('click', () => {
     if(!selected || tables.length<=1) return;
     scene.remove(selected); tables.splice(tables.indexOf(selected),1);
-    selectTable(tables[0]); afterChange(true);
+    selectTable(tables[0]); afterChange('all');
   });
   document.getElementById('add').addEventListener('click', () => {
     if(!selected) return; const [x,z]=nextBouquetSpot(selected); addBouquet(selected, currentSpec, x, z); afterChange(false);
@@ -379,6 +459,10 @@
   document.getElementById('g-minus').addEventListener('click', () => { if(selected){ selected.userData.seats=Math.max(2,selected.userData.seats-1); buildSettings(selected); afterChange(false);} });
   document.getElementById('g-plus').addEventListener('click',  () => { if(selected){ selected.userData.seats=Math.min(14,selected.userData.seats+1); buildSettings(selected); afterChange(false);} });
   document.getElementById('reset').addEventListener('click', () => frameAll());
+  document.getElementById('panel-head').addEventListener('click', () => {
+    const p=document.getElementById('panel'); p.classList.toggle('collapsed');
+    p.querySelector('.chev').textContent = p.classList.contains('collapsed') ? '▸' : '▾';
+  });
 
   function resize(){ const w=stage.clientWidth,h=stage.clientHeight; renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); }
   addEventListener('resize', resize);
@@ -396,11 +480,11 @@
   resize();
   const saved = readJSON(HALL_KEY);
   let list = null;
-  if (Array.isArray(saved)) list = [{ seats:6, bouquets:saved }];                 // очень старый формат
+  if (Array.isArray(saved)) list = [{ seats:SEATS_DEFAULT, bouquets:saved }];                 // очень старый формат
   else if (saved && Array.isArray(saved.tables)) list = saved.tables;             // новый формат
-  else if (saved && Array.isArray(saved.bouquets)) list = [{ seats:saved.seats||6, bouquets:saved.bouquets }]; // одностоловый
+  else if (saved && Array.isArray(saved.bouquets)) list = [{ seats:saved.seats||SEATS_DEFAULT, bouquets:saved.bouquets }]; // одностоловый
   if (list) list.forEach(d => createTable(d));
-  if (!tables.length) createTable({ x:0, z:0, seats:6, bouquets:[] });
+  if (!tables.length) createTable({ x:0, z:0, seats:SEATS_DEFAULT, bouquets:[] });
   selectTable(tables[0]);
 
   const pending = readJSON(PENDING_KEY);
