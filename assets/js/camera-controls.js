@@ -15,7 +15,9 @@
    ============================================================ */
 window.createCameraControls = function(camera, el, opts){
   opts = opts || {};
-  const DMIN = 3.5, DMAX = 300;
+  const DMIN = opts.distMin || 3.5, DMAX = opts.distMax || 300;
+  const PAN_R = opts.panRadius || 40;              // насколько далеко можно увести центр обзора
+  const PAN_Y = opts.panY || [-10, 120];           // пределы высоты центра
   const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
 
   let az = .7, pol = 1.28, dist = 110;
@@ -35,9 +37,9 @@ window.createCameraControls = function(camera, el, opts){
     const u = new THREE.Vector3().crossVectors(r, f).normalize();
     const s = dist*0.0016;
     target.addScaledVector(r, -dx*s).addScaledVector(u, dy*s);
-    target.y = clamp(target.y, -10, 120);
+    target.y = clamp(target.y, PAN_Y[0], PAN_Y[1]);
     const rr = Math.hypot(target.x, target.z);
-    if (rr > 40){ target.x *= 40/rr; target.z *= 40/rr; }
+    if (rr > PAN_R){ target.x *= PAN_R/rr; target.z *= PAN_R/rr; }
     place();
   }
   function frame(focus, fit, keepDist){

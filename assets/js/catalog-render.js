@@ -28,21 +28,30 @@ window.CatalogUI = (function(){
         </div>`).join('');
     }
 
+    function rowHTML(it){
+      const q = state.cart[it.id] || 0;
+      return `<div class="row ${q?'on':''}" data-row="${it.id}">
+        <span class="dot" style="background:#${hex6(it.color)}"></span>
+        <span class="nm"><b>${it.name}</b><span>${it.price} zł · бутон ${it.bloom_cm} см${it.model?' · <b style=\"color:var(--straw);font-weight:600\">модель из фото</b>':''}</span></span>
+        <span class="stepper">
+          <button data-m="${it.id}" ${q?'':'disabled'}>−</button>
+          <span class="q">${q}</span>
+          <button data-p="${it.id}">+</button>
+        </span></div>`;
+    }
+
     function drawCatalog(){
       let html = '';
+      // Пин сверху: всё, что уже в букете — чтобы добавлять ещё, не листая список.
+      const chosen = CATALOG.filter(i => (state.cart[i.id]||0) > 0);
+      if (chosen.length){
+        html += `<div class="group-title pinned"><span class="label">В букете</span><span class="label" style="letter-spacing:0;text-transform:none;font-weight:400">меняйте, не листая</span></div>`;
+        for (const it of chosen) html += rowHTML(it);
+        html += `<div class="cat-divider"></div>`;
+      }
       for (const role of ['accent','mass','filler','green']){
         html += `<div class="group-title"><span class="label">${ROLES[role].title}</span><span class="label" style="letter-spacing:0;text-transform:none;font-weight:400">${ROLES[role].hint}</span></div>`;
-        for (const it of CATALOG.filter(i => i.role === role)){
-          const q = state.cart[it.id] || 0;
-          html += `<div class="row ${q?'on':''}" data-row="${it.id}">
-            <span class="dot" style="background:#${hex6(it.color)}"></span>
-            <span class="nm"><b>${it.name}</b><span>${it.price} zł · бутон ${it.bloom_cm} см${it.model?' · <b style=\"color:var(--straw);font-weight:600\">модель из фото</b>':''}</span></span>
-            <span class="stepper">
-              <button data-m="${it.id}" ${q?'':'disabled'}>−</button>
-              <span class="q">${q}</span>
-              <button data-p="${it.id}">+</button>
-            </span></div>`;
-        }
+        for (const it of CATALOG.filter(i => i.role === role)) html += rowHTML(it);
       }
       listEl.innerHTML = html;
     }

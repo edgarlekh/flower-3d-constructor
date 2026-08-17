@@ -12,7 +12,7 @@
 <div id="topbar">
   <a class="back" href="constructor.html">← В конструктор</a>
   <h1 class="serif">Зал</h1>
-  <span class="guests">Гостей за столом: <button id="g-minus">−</button><b id="guests">6</b><button id="g-plus">+</button></span>
+  <span class="guests"><span class="gl">Гостей</span><button id="g-minus">−</button><b id="guests">6</b><button id="g-plus">+</button></span>
   <span class="spacer"></span>
   <span id="readout">Столов: <b id="tcount">0</b> · букетов: <b id="count">0</b></span>
 </div>
@@ -22,17 +22,18 @@
     <span class="tlabel">Столы</span>
     <button id="add-table" class="primary">+ Стол</button>
     <button id="copy-table">Копия стола</button>
-    <button id="del-table">Удалить стол</button>
+    <button id="del-table" class="danger">Удалить стол</button>
   </div>
   <div class="tgroup">
     <span class="tlabel">Композиция</span>
-    <button id="add">+ Копия букета</button>
+    <button id="add" class="primary">+ Копия букета</button>
     <button id="remove">Убрать букет</button>
   </div>
   <button id="reset">Показать все</button>
 </div>
 
 <div id="warnings"></div>
+<div id="ruler"></div>
 
 <div id="empty" style="display:none">
   <div>
@@ -92,6 +93,40 @@
     new THREE.MeshStandardMaterial({color:0x9CB08A, roughness:.6, emissive:0x2c3a22}));
   selRing.rotation.x = -Math.PI/2; selRing.position.y = 0.6; selRing.visible = false; scene.add(selRing);
 
+  // рулетка: линия + подпись расстояния при перетаскивании
+  const rulerGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const rulerLine = new THREE.Line(rulerGeo, new THREE.LineBasicMaterial({color:0xB8737E}));
+  rulerLine.visible = false; scene.add(rulerLine);
+  const rulerLabel = document.getElementById('ruler');
+  function hideRuler(){ rulerLine.visible=false; rulerLabel.style.display='none'; }
+  function updateRuler(obj){
+    let a=null, b=null, cm=0, text='';
+    const wa=new THREE.Vector3();
+    if (obj.userData.kind === 'table'){
+      const t=obj.userData.table; let best=Infinity, bt=null;
+      tables.forEach(o=>{ if(o===t) return; const d=Math.hypot(o.position.x-t.position.x,o.position.z-t.position.z); if(d<best){best=d;bt=o;} });
+      if(!bt){ hideRuler(); return; }
+      a=new THREE.Vector3(t.position.x,TABLE_H+8,t.position.z);
+      b=new THREE.Vector3(bt.position.x,TABLE_H+8,bt.position.z);
+      cm=Math.max(0, Math.round(best - 2*TABLE_R)); text=`между столами: ${cm} см`;
+    } else {
+      const t=obj.userData.table; obj.getWorldPosition(wa);
+      const siblings=[...t.userData.bouquets.children, ...t.userData.settings.children.filter(c=>c.userData.kind==='setting')].filter(o=>o!==obj);
+      let best=Infinity, bo=null; const wb=new THREE.Vector3();
+      siblings.forEach(o=>{ o.getWorldPosition(wb); const d=wa.distanceTo(wb); if(d<best){best=d;bo=o.clone();bo.position.copy(wb);} });
+      a=wa.clone();
+      if(bo){ b=bo.position.clone(); cm=Math.round(best); text=`до соседа: ${cm} см`; }
+      else { b=new THREE.Vector3(t.position.x,wa.y,t.position.z); cm=Math.round(a.distanceTo(b)); text=`от центра: ${cm} см`; }
+    }
+    rulerGeo.setFromPoints([a,b]); rulerGeo.attributes.position.needsUpdate=true; rulerLine.visible=true;
+    const mid=a.clone().lerp(b,0.5).project(camera);
+    const rect=renderer.domElement.getBoundingClientRect();
+    rulerLabel.style.display='block';
+    rulerLabel.style.left=(rect.left+(mid.x*0.5+0.5)*rect.width)+'px';
+    rulerLabel.style.top=(rect.top+(-mid.y*0.5+0.5)*rect.height)+'px';
+    rulerLabel.textContent=text;
+  }
+
   // --- общие геометрии/материалы ---
   const woodMat  = new THREE.MeshStandardMaterial({color:0xC9B79A, roughness:.7});
   const clothMat = new THREE.MeshStandardMaterial({color:0xF3EEE6, roughness:.92, side:THREE.DoubleSide});
@@ -138,6 +173,9 @@
   const cam = window.createCameraControls(camera, renderer.domElement, {
     onInteract: () => document.getElementById('hint').classList.add('gone'),
     onReset: () => frameAll(),
+    panRadius: 2000,          // можно ездить по всему залу, а не только у центрального стола
+    panY: [-10, 300],
+    distMin: 30, distMax: 3500,
   });
   function frameAll(){
     let cx=0, cz=0; tables.forEach(t=>{ cx+=t.position.x; cz+=t.position.z; });
@@ -252,6 +290,7 @@
       if (r>ITEM_EDGE){ lx*=ITEM_EDGE/r; lz*=ITEM_EDGE/r; }
       obj.position.x=lx; obj.position.z=lz;
     }
+    updateRuler(obj);
     renderWarnings();
   }
   const drag = window.createFlowerDrag(camera, renderer.domElement, {
@@ -262,26 +301,45 @@
     setCameraPaused: (v) => cam.setPaused(v),
     moveTo: onMove,
     onGrab: (o) => { selectTable(o.userData.table); document.getElementById('hint').classList.add('gone'); },
-    onRelease: () => { updateReadout(); saveHall(); renderWarnings(); },
+    onRelease: () => { hideRuler(); updateReadout(); saveHall(); renderWarnings(); },
   });
 
   // --- проверки «влезает/тесно» для выбранного стола ---
   function computeWarnings(t){
     if (!t) return [];
     const w=[], seats=t.userData.seats;
-    if (seats*54 > 2*Math.PI*CHAIR_R) w.push(['Стульям тесно', `${seats} гостей не рассадить вокруг стола ⌀${TABLE_R*2} см.`]);
+    if (seats*54 > 2*Math.PI*CHAIR_R) w.push(['Стульям тесно', `${seats} гостей не рассадить вокруг стола ⌀${TABLE_R*2} см — возьмите стол больше или меньше гостей.`]);
     const bqs = t.userData.bouquets.children;
     const sets = t.userData.settings.children.filter(c=>c.userData.kind==='setting');
+    // приборы налезают друг на друга
+    let setHit=false;
+    for(let i=0;i<sets.length;i++)for(let j=i+1;j<sets.length;j++){
+      if(Math.hypot(sets[i].position.x-sets[j].position.x, sets[i].position.z-sets[j].position.z) < 34) setHit=true;
+    }
+    if (setHit) w.push(['Приборы налезают', 'Соседние тарелки/приборы перекрываются — раздвиньте их или уменьшите число гостей.']);
+    // букет заходит на тарелки
     let hit=false;
     bqs.forEach(b=>{ const fp=b.userData.footprint||12; sets.forEach(s=>{ if(Math.hypot(b.position.x-s.position.x,b.position.z-s.position.z)<fp+PLATE_RAD) hit=true; }); });
     if (hit) w.push(['Букет заходит на тарелки', 'Не влезает между приборами — сдвиньте к центру или возьмите вазу уже.']);
+    // букеты вплотную
     let tight=false;
     for(let i=0;i<bqs.length;i++)for(let j=i+1;j<bqs.length;j++){ const a=bqs[i],b=bqs[j]; if(Math.hypot(a.position.x-b.position.x,a.position.z-b.position.z)<(a.userData.footprint||12)+(b.userData.footprint||12)) tight=true; }
     if (tight) w.push(['Букеты вплотную', 'Композиции перекрываются — расставьте свободнее.']);
     return w;
   }
+  // столы/стулья налезают друг на друга (по всему залу)
+  function tableOverlaps(){
+    const bad = [];
+    for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){
+      const d = Math.hypot(tables[i].position.x-tables[j].position.x, tables[i].position.z-tables[j].position.z);
+      if (d < 2*CHAIR_R + 15) bad.push([i+1, j+1, Math.round(d)]);
+    }
+    return bad;
+  }
   function renderWarnings(){
     const w = computeWarnings(selected);
+    const ov = tableOverlaps();
+    if (ov.length) w.unshift(['Столы стоят вплотную', `Стульям между столами не разойтись (нужно ≥ ${Math.round(2*CHAIR_R+15)} см между центрами). Раздвиньте столы.`]);
     document.getElementById('warnings').innerHTML = w.map(x=>`<div class="warn"><strong>${x[0]}.</strong> ${x[1]}</div>`).join('');
   }
 
