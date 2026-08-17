@@ -20,7 +20,8 @@
 <div id="tools">
   <div class="tgroup">
     <span class="tlabel">Столы</span>
-    <button id="add-table" class="primary">+ Стол</button>
+    <button id="add-table" class="primary">+ Круглый ⌀150</button>
+    <button id="add-rect">+ Банкетный 240×90</button>
     <button id="copy-table">Копия стола</button>
     <button id="del-table" class="danger">Удалить стол</button>
     <div class="cloth-row" id="cloth-colors">
@@ -226,14 +227,14 @@
       const near = tables.filter(o=>o!==t)
         .map(o=>({o, d:Math.hypot(o.position.x-t.position.x, o.position.z-t.position.z)}))
         .sort((a,b)=>a.d-b.d).slice(0, DIM_N);
-      near.forEach(({o,d})=>{ const gap=Math.round(d-2*CHAIR_OUTER);
+      near.forEach(({o,d})=>{ const gap=Math.round(d - tableReach(t) - tableReach(o));
         dims.push({a:new THREE.Vector3(t.position.x,TABLE_H+8,t.position.z), b:new THREE.Vector3(o.position.x,TABLE_H+8,o.position.z), text:`${gap} см`, warn:gap<40}); });
       return dims;
     }
-    const lx=obj.position.x, lz=obj.position.z, rad=Math.hypot(lx,lz), fp=obj.userData.footprint||6;
-    // до края стола
-    const dl=rad||1, ex=t.position.x+lx/dl*TABLE_R, ez=t.position.z+lz/dl*TABLE_R, edge=Math.round(TABLE_R-rad-fp);
-    dims.push({a:wa.clone(), b:new THREE.Vector3(ex,wa.y,ez), text:`до края: ${edge} см`, warn:edge<0});
+    const lx=obj.position.x, lz=obj.position.z, fp=obj.userData.footprint||6;
+    // до края стола (по форме)
+    const ei=edgeInfo(t,lx,lz), edge=Math.round(ei.dist-fp);
+    dims.push({a:wa.clone(), b:new THREE.Vector3(t.position.x+ei.ex, wa.y, t.position.z+ei.ez), text:`до края: ${edge} см`, warn:edge<0});
     // до ближайшей тарелки
     const sets=t.userData.settings.children.filter(c=>c.userData.kind==='setting');
     let bd=Infinity,bs=null; sets.forEach(s=>{ const d=Math.hypot(lx-s.position.x,lz-s.position.z); if(d<bd){bd=d;bs=s;} });
@@ -253,18 +254,19 @@
   const prow = (label, cm, warn) => `<div class="prow ${warn?'warn':''}"><span>${label}</span><b>${cm} см</b></div>`;
   function updatePanel(){
     const t = selected;
+    const sz = t ? (isRect(t) ? `${t.userData.hl*2}×${t.userData.hw*2} см` : `⌀ ${tR(t)*2} см`) : '';
     document.getElementById('p-table').innerHTML = t
-      ? `<div class="ptitle">Стол №${tables.indexOf(t)+1}</div><div class="pbig">⌀ ${TABLE_R*2} см · ${t.userData.seats} гост.</div>`
+      ? `<div class="ptitle">Стол №${tables.indexOf(t)+1}</div><div class="pbig">${sz} · ${t.userData.seats} гост.</div>`
       : '<div class="pmuted">Стол не выбран</div>';
     // зазоры
     let gaps = '';
     if (t){
-      let best=Infinity; tables.forEach(o=>{ if(o===t)return; best=Math.min(best, Math.hypot(o.position.x-t.position.x, o.position.z-t.position.z)); });
-      if (best<Infinity) gaps += prow('Проход до соседнего стола', Math.round(best-2*CHAIR_OUTER), (best-2*CHAIR_OUTER)<40);
+      let best=Infinity, bo=null; tables.forEach(o=>{ if(o===t)return; const d=Math.hypot(o.position.x-t.position.x, o.position.z-t.position.z); if(d<best){best=d;bo=o;} });
+      if (bo){ const g=Math.round(best - tableReach(t) - tableReach(bo)); gaps += prow('Проход до соседнего стола', g, g<40); }
       const bqs=t.userData.bouquets.children, sets=t.userData.settings.children.filter(c=>c.userData.kind==='setting');
       let bp=Infinity; bqs.forEach(b=>{ const fp=b.userData.footprint||12; sets.forEach(s=>{ bp=Math.min(bp, Math.hypot(b.position.x-s.position.x,b.position.z-s.position.z)-fp-PLATE_RAD); }); });
       if (bp<Infinity) gaps += prow('Букет до тарелки (мин.)', Math.round(bp), bp<0);
-      let be=Infinity; bqs.forEach(b=>{ const fp=b.userData.footprint||12; be=Math.min(be, TABLE_R-Math.hypot(b.position.x,b.position.z)-fp); });
+      let be=Infinity; bqs.forEach(b=>{ const fp=b.userData.footprint||12; be=Math.min(be, edgeInfo(t,b.position.x,b.position.z).dist - fp); });
       if (be<Infinity) gaps += prow('Букет до края (мин.)', Math.round(be), be<0);
     }
     document.getElementById('p-gaps').innerHTML = gaps ? `<div class="ptitle">Зазоры</div>${gaps}` : '';
@@ -279,7 +281,7 @@
   // Подлёт камеры к конкретному столу (двойной клик).
   function frameTable(t){
     FOCUS.set(t.position.x, TABLE_H, t.position.z);
-    const R=Math.max(CHAIR_R+55, 90), fov=camera.fov*Math.PI/180;
+    const R=Math.max(tableReach(t)+35, 90), fov=camera.fov*Math.PI/180;
     const vFit=R/Math.sin(fov/2), hFit=R/Math.sin(2*Math.atan(Math.tan(fov/2)*Math.max(camera.aspect,0.4))/2);
     FIT=Math.max(vFit,hFit)*1.05; cam.frame(FOCUS, FIT, false);
   }
@@ -326,6 +328,41 @@
     return g;
   }
 
+  // === ФОРМА СТОЛА (круглый / прямоугольный-банкетный) ===
+  const RECT_HL=120, RECT_HW=45;         // половины длины/ширины банкетного стола 240×90
+  const isRect = t => t.userData.shape==='rect';
+  const tR = t => t.userData.R || TABLE_R;                 // радиус круглого
+  // Места (тарелка+стул) в локальных координатах стола.
+  function seatDescriptors(t){
+    const seats=t.userData.seats, out=[];
+    if (isRect(t)){
+      const hl=t.userData.hl, hw=t.userData.hw, nTop=Math.ceil(seats/2), nBot=seats-nTop;
+      const side=(n,s)=>{ for(let i=0;i<n;i++){ const x=-hl + (i+0.5)/n*(2*hl);
+        out.push({ px:x, pz:s*(hw-15), cx:x, cz:s*(hw+22), srot:s>0?Math.PI:0, crot:s>0?Math.PI:0 }); } };
+      side(nTop,+1); side(nBot,-1);
+    } else {
+      const R=tR(t);
+      for(let i=0;i<seats;i++){ const a=i/seats*Math.PI*2-Math.PI/2, c=Math.cos(a), s=Math.sin(a);
+        out.push({ px:c*(R-16), pz:s*(R-16), cx:c*(R+22), cz:s*(R+22), srot:-a+Math.PI/2, crot:-a-Math.PI/2 }); }
+    }
+    return out;
+  }
+  // Держать предмет на столешнице.
+  function clampItem(t, lx, lz){
+    if (isRect(t)){ const hl=t.userData.hl-6, hw=t.userData.hw-6; return [Math.max(-hl,Math.min(hl,lx)), Math.max(-hw,Math.min(hw,lz))]; }
+    const R=tR(t)-6, r=Math.hypot(lx,lz); return r>R ? [lx*R/r, lz*R/r] : [lx,lz];
+  }
+  // Ближайший край: расстояние и точка (локально).
+  function edgeInfo(t, lx, lz){
+    if (isRect(t)){ const hl=t.userData.hl, hw=t.userData.hw, dx=hl-Math.abs(lx), dz=hw-Math.abs(lz);
+      return dx<dz ? {dist:dx, ex:Math.sign(lx||1)*hl, ez:lz} : {dist:dz, ex:lx, ez:Math.sign(lz||1)*hw}; }
+    const R=tR(t), r=Math.hypot(lx,lz)||1; return {dist:R-r, ex:lx/r*R, ez:lz/r*R};
+  }
+  // Габарит «стол+стулья» для проверок и коллизий.
+  function tableReach(t){ return isRect(t) ? Math.hypot(t.userData.hl, t.userData.hw)+43 : tR(t)+43; }
+  // Свободная длина периметра под стулья.
+  function seatPerimeter(t){ return isRect(t) ? 4*t.userData.hl : 2*Math.PI*(tR(t)+22); }
+
   // --- камера ---
   let FOCUS = new THREE.Vector3(0, TABLE_H, 0), FIT = 400;
   const cam = window.createCameraControls(camera, renderer.domElement, {
@@ -340,7 +377,7 @@
     let cx=0, cz=0; tables.forEach(t=>{ cx+=t.position.x; cz+=t.position.z; });
     if (tables.length){ cx/=tables.length; cz/=tables.length; }
     let spread = TABLE_R;
-    tables.forEach(t=> spread = Math.max(spread, Math.hypot(t.position.x-cx, t.position.z-cz)+TABLE_R));
+    tables.forEach(t=> spread = Math.max(spread, Math.hypot(t.position.x-cx, t.position.z-cz)+tableReach(t)));
     if (venueBounds){ cx=venueBounds.cx; cz=venueBounds.cz; spread=Math.max(spread, venueBounds.radius); }
     FOCUS.set(cx, TABLE_H, cz);
     const R = Math.max(Math.hypot(spread, 60), 80);
@@ -363,16 +400,16 @@
   function buildSettings(t, saved){
     const sg = t.userData.settings; const seats = t.userData.seats;
     while (sg.children.length) sg.remove(sg.children[0]);
+    const desc = seatDescriptors(t);
     const use = (saved && saved.length === seats) ? saved : null;
-    for (let i=0;i<seats;i++){
-      const a = i/seats*Math.PI*2 - Math.PI/2, cs=Math.cos(a), sn=Math.sin(a);
-      const ch = chairMesh(); ch.position.set(cs*CHAIR_R,0,sn*CHAIR_R); ch.rotation.y=-a-Math.PI/2; sg.add(ch);
+    desc.forEach((d,i)=>{
+      const ch = chairMesh(); ch.position.set(d.cx,0,d.cz); ch.rotation.y=d.crot; sg.add(ch);
       const s = settingMesh();
       if (use){ s.position.set(use[i].x, TABLE_TOP, use[i].z); s.rotation.y = use[i].rot; }
-      else { s.position.set(cs*PLATE_R, TABLE_TOP, sn*PLATE_R); s.rotation.y = -a + Math.PI/2; }
+      else { s.position.set(d.px, TABLE_TOP, d.pz); s.rotation.y = d.srot; }
       s.userData = { kind:'setting', table:t };
       sg.add(s);
-    }
+    });
   }
 
   function addBouquet(t, spec, lx, lz){
@@ -390,20 +427,35 @@
   function nextBouquetSpot(t){
     const n = t.userData.bouquets.children.length;
     if (n === 0) return [0,0];
-    const ring = ITEM_EDGE*0.5, a = (n-1)*(Math.PI*2/6)+0.4;
+    // банкетный — букеты в ряд по центру вдоль длины
+    if (isRect(t)){ const span=2*t.userData.hl-50; return clampItem(t, -t.userData.hl+25 + (n%5)*(span/4), 0); }
+    const ring = (tR(t)-6)*0.5, a = (n-1)*(Math.PI*2/6)+0.4;
     return [Math.cos(a)*ring, Math.sin(a)*ring];
   }
 
   function createTable(data){
     const t = new THREE.Group();
     t.position.set(data.x||0, 0, data.z||0);
-    t.userData = { kind:'table', seats: data.seats||SEATS_DEFAULT };
-    const top=new THREE.Mesh(topGeo,woodMat); top.position.y=TABLE_H-2; top.castShadow=true; t.add(top);
-    const stem=new THREE.Mesh(stemGeo,woodMat); stem.position.y=(TABLE_H-4)/2; stem.castShadow=true; t.add(stem);
-    const foot=new THREE.Mesh(footGeo,woodMat); foot.position.y=1.5; foot.castShadow=true; t.add(foot);
-    const clothTop=new THREE.Mesh(clothTopGeo,clothMat); clothTop.rotation.x=-Math.PI/2; clothTop.position.y=TABLE_H+0.3; clothTop.receiveShadow=true; clothTop.userData={kind:'table',table:t}; t.add(clothTop);
-    const skirt=new THREE.Mesh(skirtGeo,clothMat); skirt.position.y=TABLE_H/2+1; skirt.castShadow=true; skirt.receiveShadow=true; skirt.userData={kind:'table',table:t}; t.add(skirt);
-    t.userData.handles=[clothTop,skirt];
+    const shape = data.shape==='rect' ? 'rect' : 'round';
+    t.userData = { kind:'table', shape, seats: data.seats||SEATS_DEFAULT };
+    if (shape==='rect'){
+      const hl=t.userData.hl = data.hl||RECT_HL, hw=t.userData.hw = data.hw||RECT_HW;
+      // скатерть-короб (драпировка до пола) — она же ручка перетаскивания
+      const cloth=new THREE.Mesh(new THREE.BoxGeometry(2*hl+4, TABLE_H, 2*hw+4), clothMat);
+      cloth.position.y=TABLE_H/2; cloth.castShadow=true; cloth.receiveShadow=true; cloth.userData={kind:'table',table:t}; t.add(cloth);
+      // верхняя «столешница» (чуть светлее — плоская крышка)
+      const top=new THREE.Mesh(new THREE.BoxGeometry(2*hl+5, 1.5, 2*hw+5), clothMat);
+      top.position.y=TABLE_H+0.6; top.receiveShadow=true; top.userData={kind:'table',table:t}; t.add(top);
+      t.userData.handles=[cloth, top];
+    } else {
+      t.userData.R = data.R || TABLE_R;
+      const top=new THREE.Mesh(topGeo,woodMat); top.position.y=TABLE_H-2; top.castShadow=true; t.add(top);
+      const stem=new THREE.Mesh(stemGeo,woodMat); stem.position.y=(TABLE_H-4)/2; stem.castShadow=true; t.add(stem);
+      const foot=new THREE.Mesh(footGeo,woodMat); foot.position.y=1.5; foot.castShadow=true; t.add(foot);
+      const clothTop=new THREE.Mesh(clothTopGeo,clothMat); clothTop.rotation.x=-Math.PI/2; clothTop.position.y=TABLE_H+0.3; clothTop.receiveShadow=true; clothTop.userData={kind:'table',table:t}; t.add(clothTop);
+      const skirt=new THREE.Mesh(skirtGeo,clothMat); skirt.position.y=TABLE_H/2+1; skirt.castShadow=true; skirt.receiveShadow=true; skirt.userData={kind:'table',table:t}; t.add(skirt);
+      t.userData.handles=[clothTop,skirt];
+    }
     t.userData.settings=new THREE.Group(); t.add(t.userData.settings);
     t.userData.bouquets=new THREE.Group(); t.add(t.userData.bouquets);
     scene.add(t); tables.push(t);
@@ -415,6 +467,7 @@
   function tableData(t){
     return {
       x:+t.position.x.toFixed(1), z:+t.position.z.toFixed(1), seats:t.userData.seats,
+      shape:t.userData.shape, hl:t.userData.hl, hw:t.userData.hw, R:t.userData.R,
       bouquets: t.userData.bouquets.children.map(b=>({ spec:b.userData.spec, x:+b.position.x.toFixed(1), z:+b.position.z.toFixed(1) })),
       settings: t.userData.settings.children.filter(c=>c.userData.kind==='setting')
                  .map(s=>({ x:+s.position.x.toFixed(1), z:+s.position.z.toFixed(1), rot:+s.rotation.y.toFixed(3) })),
@@ -435,7 +488,7 @@
   function undo(){ if(viewOnly || !history.length) return; restoreTables(JSON.parse(history.pop())); showMsg('Отменено'); }
   // Свободное место для нового стола: расширяющиеся кольца, без наложения на существующие.
   function freeSpot(){
-    const MIN = 2*CHAIR_OUTER + 45;             // центр-центр с проходом ≥ 45 см
+    const MIN = 2*(Math.hypot(RECT_HL,RECT_HW)+43) + 40;   // с запасом под любую форму
     if (!tables.length) return [0,0];
     for (let ring=1; ring<10; ring++){
       const R = ring*MIN, steps = Math.max(6, ring*6);
@@ -449,7 +502,11 @@
 
   function selectTable(t){
     selected = t;
-    if (t){ selRing.visible = true; selRing.position.set(t.position.x, 0.6, t.position.z); document.getElementById('guests').textContent = t.userData.seats; }
+    if (t){ selRing.visible = true; selRing.position.set(t.position.x, 0.6, t.position.z);
+      const base=TABLE_R+12;   // кольцо-эллипс подгоняем под форму стола
+      if(isRect(t)) selRing.scale.set((t.userData.hl+22)/base, 1, (t.userData.hw+22)/base);
+      else selRing.scale.set((tR(t)+12)/base, 1, (tR(t)+12)/base);
+      document.getElementById('guests').textContent = t.userData.seats; }
     else selRing.visible = false;
     updatePanel();
   }
@@ -479,10 +536,8 @@
     } else {
       // букет/прибор: свободно тянем в мировых координатах (можно на другой стол)
       let lx=p.x - t.position.x, lz=p.z - t.position.z;
-      if (obj.userData.kind==='setting'){ const r=Math.hypot(lx,lz); if(r>ITEM_EDGE){ lx*=ITEM_EDGE/r; lz*=ITEM_EDGE/r; } }
-      else { // букет — привязка к центру стола, но без жёсткого клэмпа (для переноса)
-        if(Math.hypot(lx,lz)<12){ lx=0; lz=0; }
-      }
+      if (obj.userData.kind==='setting'){ [lx,lz]=clampItem(t,lx,lz); }
+      else { if(Math.hypot(lx,lz)<12){ lx=0; lz=0; } }   // букет ловится в центр, без жёсткого клэмпа
       obj.position.x=lx; obj.position.z=lz;
     }
     renderDims(computeDims(obj));
@@ -551,8 +606,7 @@
     let best=Infinity, nt=b.userData.table;
     tables.forEach(t=>{ const d=Math.hypot(wx-t.position.x, wz-t.position.z); if(d<best){ best=d; nt=t; } });
     if(nt!==b.userData.table){ nt.userData.bouquets.add(b); b.userData.table=nt; selectTable(nt); }
-    let lx=wx-nt.position.x, lz=wz-nt.position.z; const r=Math.hypot(lx,lz);
-    if(r>ITEM_EDGE){ lx*=ITEM_EDGE/r; lz*=ITEM_EDGE/r; }
+    const [lx,lz]=clampItem(nt, wx-nt.position.x, wz-nt.position.z);
     b.position.x=lx; b.position.z=lz;
   }
 
@@ -571,7 +625,7 @@
   function computeWarnings(t){
     if (!t) return [];
     const w=[], seats=t.userData.seats;
-    if (seats*54 > 2*Math.PI*CHAIR_R) w.push(['Стульям тесно', `${seats} гостей не рассадить вокруг стола ⌀${TABLE_R*2} см — возьмите стол больше или меньше гостей.`]);
+    if (seats*54 > seatPerimeter(t)) w.push(['Стульям тесно', `${seats} гостей не рассадить за этим столом — возьмите стол больше или меньше гостей.`]);
     const bqs = t.userData.bouquets.children;
     const sets = t.userData.settings.children.filter(c=>c.userData.kind==='setting');
     // приборы налезают друг на друга
@@ -594,7 +648,7 @@
   function tableOverlaps(){
     for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){
       const d = Math.hypot(tables[i].position.x-tables[j].position.x, tables[i].position.z-tables[j].position.z);
-      if (d < 2*CHAIR_OUTER) return true;      // стулья соседних столов налезают
+      if (d < tableReach(tables[i]) + tableReach(tables[j])) return true;   // стулья соседних столов налезают
     }
     return false;
   }
@@ -615,11 +669,14 @@
   function afterChange(frame){ updateReadout(); renderWarnings(); saveHall();
     if(frame==='all') frameAll(); else if(frame==='table' && selected) frameTable(selected); }
 
-  document.getElementById('add-table').addEventListener('click', () => {
+  function addTableShape(shape){
     pushHistory();
-    const [x,z]=freeSpot(); const t=createTable({x,z,seats:SEATS_DEFAULT,bouquets:[{spec:currentSpec,x:0,z:0}]});
-    selectTable(t); afterChange('table');        // подлетаем к новому столу
-  });
+    const [x,z]=freeSpot();
+    const t=createTable({ x, z, shape, seats: shape==='rect'?8:SEATS_DEFAULT, bouquets:[{spec:currentSpec,x:0,z:0}] });
+    selectTable(t); afterChange('table');
+  }
+  document.getElementById('add-table').addEventListener('click', () => addTableShape('round'));
+  document.getElementById('add-rect').addEventListener('click', () => addTableShape('rect'));
   document.getElementById('copy-table').addEventListener('click', () => {
     if(!selected) return; pushHistory(); const d=tableData(selected); const [x,z]=freeSpot();
     const t=createTable(Object.assign({}, d, {x,z})); selectTable(t); afterChange('table');
@@ -753,9 +810,11 @@
     if(fh.length){ walk.goto={x:cl(fh[0].point.x,-1400,1400), z:cl(fh[0].point.z,-1400,1400)}; walk.teye=EYE_STAND; walk.face=null; }
   }
   function sitAt(t){
-    const seats=t.userData.seats; let bestA=0, best=Infinity;
-    for(let i=0;i<seats;i++){ const a=i/seats*Math.PI*2 - Math.PI/2; const sx=t.position.x+Math.cos(a)*CHAIR_R, sz=t.position.z+Math.sin(a)*CHAIR_R; const d=Math.hypot(sx-walk.x,sz-walk.z); if(d<best){best=d;bestA=a;} }
-    walk.goto={ x:t.position.x+Math.cos(bestA)*(CHAIR_R+6), z:t.position.z+Math.sin(bestA)*(CHAIR_R+6) };
+    // ближайшее место (стул) по форме стола
+    const desc=seatDescriptors(t); let best=Infinity, bc=null;
+    desc.forEach(d=>{ const sx=t.position.x+d.cx, sz=t.position.z+d.cz, dist=Math.hypot(sx-walk.x,sz-walk.z); if(dist<best){best=dist;bc=d;} });
+    if(!bc) return;
+    walk.goto={ x:t.position.x+bc.cx*1.06, z:t.position.z+bc.cz*1.06 };
     walk.teye=EYE_SIT; walk.face=new THREE.Vector3(t.position.x, TABLE_H+8, t.position.z);
     selectTable(t);
   }
@@ -781,7 +840,9 @@
     walk.x+=walk.vx; walk.z+=walk.vz;
     if(walk.goto){ walk.x+=(walk.goto.x-walk.x)*0.09; walk.z+=(walk.goto.z-walk.z)*0.09; if(Math.hypot(walk.goto.x-walk.x,walk.goto.z-walk.z)<3) walk.goto=null; }
     // не заходить сквозь столы
-    tables.forEach(t=>{ const dx=walk.x-t.position.x, dz=walk.z-t.position.z, d=Math.hypot(dx,dz), R=TABLE_R+16; if(d<R&&d>0.01){ walk.x=t.position.x+dx/d*R; walk.z=t.position.z+dz/d*R; walk.vx*=0.3; walk.vz*=0.3; } });
+    tables.forEach(t=>{ const dx=walk.x-t.position.x, dz=walk.z-t.position.z;
+      if(isRect(t)){ const hl=t.userData.hl+16, hw=t.userData.hw+16; if(Math.abs(dx)<hl&&Math.abs(dz)<hw){ const ox=hl-Math.abs(dx), oz=hw-Math.abs(dz); if(ox<oz){ walk.x=t.position.x+Math.sign(dx||1)*hl; walk.vx*=0.3; } else { walk.z=t.position.z+Math.sign(dz||1)*hw; walk.vz*=0.3; } } }
+      else { const d=Math.hypot(dx,dz), R=tR(t)+16; if(d<R&&d>0.01){ walk.x=t.position.x+dx/d*R; walk.z=t.position.z+dz/d*R; walk.vx*=0.3; walk.vz*=0.3; } } });
     // не выходить за стены загруженной комнаты
     if(venueBounds){ const mg=35;
       if(walk.x<venueBounds.minX+mg){walk.x=venueBounds.minX+mg;walk.vx=0;} if(walk.x>venueBounds.maxX-mg){walk.x=venueBounds.maxX-mg;walk.vx=0;}
