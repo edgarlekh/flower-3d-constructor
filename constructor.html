@@ -53,6 +53,7 @@
         <span class="label">Итого</span>
         <b id="p-total">0<small> zł</small></b>
       </div>
+      <button id="tohall">Поставить на стол →</button>
     </div>
   </section>
 
@@ -203,6 +204,15 @@
   document.getElementById('variant').addEventListener('click', () => { state.variantSeed++; rebuild(); });
   document.getElementById('relayout').addEventListener('click', () => rebuild());   // вернуть авто-раскладку
   document.getElementById('reset').addEventListener('click', () => cam.frame(FOCUS, FIT, false));
+
+  // Перенести собранный букет (состав + ваза + ручная раскладка) в зал.
+  document.getElementById('tohall').addEventListener('click', () => {
+    const m = {}; for (const k in manual){ const v = manual[k]; m[k] = [v.x, v.y, v.z]; }
+    localStorage.setItem('flowerBouquet', JSON.stringify({
+      cart: state.cart, vaseId: state.vaseId, variantSeed: state.variantSeed, manual: m,
+    }));
+    location.href = 'hall.html';
+  });
 
   // --- старт: тот самый пример ---
   state.cart.red = 3; state.cart.tul = 2; state.cart.eus = 3;

@@ -49,10 +49,15 @@ window.createFlowerDrag = function(camera, el, opts){
     active = g; activePointer = e.pointerId;
     try { el.setPointerCapture(e.pointerId); } catch(_){}
     opts.setCameraPaused(true);
-    // плоскость перетаскивания: проходит через цветок и смотрит на камеру
-    camera.getWorldDirection(camDir);
-    plane.setFromNormalAndCoplanarPoint(camDir, g.userData.headPos);
-    if (ray.ray.intersectPlane(plane, hit)) grabOffset.copy(g.userData.headPos).sub(hit);
+    // точка захвата и плоскость перетаскивания
+    const anchor = opts.getAnchor ? opts.getAnchor(g) : g.userData.headPos;
+    if (opts.planeMode === 'horizontal')
+      plane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0,1,0), anchor);   // скольжение по столу
+    else {
+      camera.getWorldDirection(camDir);                                        // плоскость экрана
+      plane.setFromNormalAndCoplanarPoint(camDir, anchor);
+    }
+    if (ray.ray.intersectPlane(plane, hit)) grabOffset.copy(anchor).sub(hit);
     else grabOffset.set(0,0,0);
     e.stopPropagation();
     el.style.cursor = 'grabbing';

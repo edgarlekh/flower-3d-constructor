@@ -137,6 +137,12 @@ canvas{display:block;touch-action:none}
 }
 .grand b{font-size:26px;font-weight:500;letter-spacing:-.02em;color:var(--rose);font-variant-numeric:tabular-nums}
 .grand b small{font-size:14px;color:var(--rose);opacity:.7}
+#tohall{
+  margin-top:12px;width:100%;border:1px solid var(--rose);
+  background:rgba(227,162,172,.14);color:var(--rose);
+  border-radius:9px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;
+}
+#tohall:hover{background:rgba(227,162,172,.24)}
 
 @media (max-width:900px){
   body{overflow:auto}

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Зал — расстановка на столе</title>
+<link rel="stylesheet" href="assets/css/hall.css">
+</head>
+<body>
+<div id="stage"></div>
+
+<div id="topbar">
+  <a class="back" href="constructor.html">← В конструктор</a>
+  <h1 class="serif">Зал</h1>
+  <span class="spacer"></span>
+  <span id="readout">Стол ⌀<b>150</b> см · букетов: <b id="count">0</b></span>
+</div>
+
+<div id="tools">
+  <button id="add" class="primary">+ Копия букета</button>
+  <button id="remove">Убрать</button>
+  <button id="reset">Вернуть вид</button>
+</div>
+
+<div id="empty" style="display:none">
+  <div>
+    <div class="serif">Букет не задан</div>
+    <p>Соберите его в <a href="constructor.html">конструкторе</a> и нажмите «На стол».</p>
+  </div>
+</div>
+
+<div id="hint" class="label">Потяните букет мышью — двигать по столу · пустое место — поворот · колесо — зум</div>
+
+<!-- движок three.js -->
+<script src="assets/js/three.min.js"></script>
+<!-- данные -->
+<script src="assets/catalog/catalog.js"></script>
+<script src="assets/catalog/models/vases.js"></script>
+<script src="assets/catalog/models/rose.js"></script>
+<!-- логика -->
+<script src="assets/js/model-loader.js"></script>
+<script src="assets/js/bouquet-engine.js"></script>
+<script src="assets/js/bouquet-builder.js"></script>
+<script src="assets/js/camera-controls.js"></script>
+<script src="assets/js/flower-drag.js"></script>
+
+<script>
+(function(){
+  // --- какой букет ставим: из конструктора (localStorage) или запасной ---
+  const DEFAULT = { cart:{red:5, gros:3, euc:4, gyp:3}, vaseId:'tall', variantSeed:0, manual:{} };
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem('flowerBouquet')); } catch(_){}
+  const spec = saved && saved.cart ? saved : DEFAULT;
+  // manual: {key:[x,y,z]} -> {key:Vector3}
+  const manual = {};
+  if (spec.manual) for (const k in spec.manual){ const a = spec.manual[k]; manual[k] = new THREE.Vector3(a[0],a[1],a[2]); }
+
+  const TABLE_R = 75, TABLE_H = 75;     // радиус 75 см (⌀150), высота 75 см
+  const EDGE = TABLE_R - 16;            // букеты держим не у самого края
+
+  // --- сцена ---
+  const stage = document.getElementById('stage');
+  const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  stage.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 1, .1, 4000);
+  scene.add(new THREE.HemisphereLight(0xFFFFFF, 0xD8D4CC, .62));
+  const key = new THREE.DirectionalLight(0xFFF7EE, 1.05); key.position.set(120,220,140); scene.add(key);
+  const rim = new THREE.DirectionalLight(0xDCE6F2, .32); rim.position.set(-140,90,-120); scene.add(rim);
+
+  // пол
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(600, 48),
+    new THREE.MeshStandardMaterial({color:0xEDEBE5, roughness:.95}));
+  floor.rotation.x = -Math.PI/2; scene.add(floor);
+
+  // мягкая тень под столом
+  (function(){
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d').createRadialGradient(64,64,6,64,64,62);
+    g.addColorStop(0,'rgba(70,62,54,.32)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    const cx = c.getContext('2d'); cx.fillStyle = g; cx.fillRect(0,0,128,128);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(TABLE_R*2.6, TABLE_R*2.6),
+      new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c), transparent:true, depthWrite:false}));
+    m.rotation.x = -Math.PI/2; m.position.y = 0.4; scene.add(m);
+  })();
+
+  // стол: столешница + ножка + основание
+  (function(){
+    const wood = new THREE.MeshStandardMaterial({color:0xC9B79A, roughness:.7});
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(TABLE_R, TABLE_R, 4, 48), wood);
+    top.position.y = TABLE_H - 2; scene.add(top);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(9, 11, TABLE_H-4, 24), wood);
+    stem.position.y = (TABLE_H-4)/2; scene.add(stem);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(34, 36, 3, 32), wood);
+    foot.position.y = 1.5; scene.add(foot);
+  })();
+
+  // --- камера ---
+  let FOCUS = new THREE.Vector3(0, TABLE_H + 10, 0), FIT = 300;
+  const cam = window.createCameraControls(camera, renderer.domElement, {
+    onInteract: () => document.getElementById('hint').classList.add('gone'),
+    onReset: () => cam.frame(FOCUS, FIT, false),
+  });
+  function frameScene(){
+    const R = Math.max(Math.hypot(TABLE_R, 55), 60);
+    const fov = camera.fov*Math.PI/180;
+    const vFit = R/Math.sin(fov/2);
+    const hFit = R/Math.sin(2*Math.atan(Math.tan(fov/2)*Math.max(camera.aspect,0.4))/2);
+    FIT = Math.max(vFit, hFit)*1.15;
+    cam.frame(FOCUS, FIT, false);
+  }
+
+  // --- букеты на столе ---
+  const bouquets = [];             // массив root-групп
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+
+  function placeBouquet(x, z){
+    const res = window.BouquetBuilder.build(spec.cart, spec.vaseId, spec.variantSeed, { manual });
+    if (!res.flowerGroups.length && !res.vase){ return null; }
+    const root = res.root;
+    root.position.set(x, TABLE_H, z);
+    root.userData.grow = 0;                 // мягкое появление
+    root.scale.setScalar(0.001);
+    scene.add(root); bouquets.push(root);
+    updateReadout();
+    return root;
+  }
+
+  // разложить копии по кольцу на столе
+  function nextSpot(){
+    const n = bouquets.length;
+    if (n === 0) return [0, 0];
+    const ring = EDGE * 0.62;
+    const a = (n-1) * (Math.PI*2 / 6) + 0.4;
+    return [Math.cos(a)*ring, Math.sin(a)*ring];
+  }
+
+  function updateReadout(){
+    document.getElementById('count').textContent = bouquets.length;
+    document.getElementById('empty').style.display = bouquets.length ? 'none' : 'grid';
+  }
+
+  // держим букет на столешнице: не даём уехать за край
+  function moveBouquet(g, p){
+    let x = p.x, z = p.z; const r = Math.hypot(x, z);
+    if (r > EDGE){ x *= EDGE/r; z *= EDGE/r; }
+    g.position.set(x, TABLE_H, z);
+  }
+
+  // --- перетаскивание букетов по столу (тот же движок, горизонтальная плоскость) ---
+  const drag = window.createFlowerDrag(camera, renderer.domElement, {
+    getPickables: () => bouquets,
+    planeMode: 'horizontal',
+    getAnchor: (g) => g.position,
+    canGrab: () => true,
+    setCameraPaused: (v) => cam.setPaused(v),
+    moveTo: moveBouquet,
+    onGrab: (g) => { g.userData.lift = true; document.getElementById('hint').classList.add('gone'); },
+    onRelease: (g) => { g.userData.lift = false; },
+  });
+
+  // --- кнопки ---
+  document.getElementById('add').addEventListener('click', () => { const [x,z] = nextSpot(); placeBouquet(x, z); });
+  document.getElementById('remove').addEventListener('click', () => {
+    const g = bouquets.pop(); if (g) scene.remove(g); updateReadout();
+  });
+  document.getElementById('reset').addEventListener('click', () => cam.frame(FOCUS, FIT, false));
+
+  function resize(){
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h); camera.aspect = w/h; camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize);
+
+  function tick(){
+    requestAnimationFrame(tick);
+    bouquets.forEach(g => {
+      if (g.userData.grow < 1){ g.userData.grow = Math.min(1, g.userData.grow + .06); g.scale.setScalar(1 - Math.pow(1 - g.userData.grow, 3)); }
+      const targetLift = g.userData.lift ? 6 : 0;   // приподнимаем схваченный букет
+      g.position.y += (TABLE_H + targetLift - g.position.y) * 0.25;
+    });
+    cam.updateInertia();
+    renderer.render(scene, camera);
+  }
+
+  // --- старт ---
+  resize(); frameScene();
+  placeBouquet(0, 0);            // первый букет по центру стола
+  tick();
+
+  // отладочный хук
+  window.hallDebug = { scene, camera, cam, bouquets, placeBouquet, moveBouquet, drag, TABLE_R, TABLE_H, EDGE, spec };
+})();
+</script>
+</body>
+</html>
