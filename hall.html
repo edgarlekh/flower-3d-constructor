@@ -629,7 +629,7 @@
   });
   document.getElementById('objmenu').addEventListener('click', (e)=>{
     const act=e.target.dataset.act; if(!act||!menuTarget) return; const b=menuTarget, t=b.userData.table;
-    if(act==='dup'){ pushHistory(); const [x,z]=nextBouquetSpot(t); addBouquet(t, b.userData.spec, x, z); afterChange(false); }
+    if(act==='dup'){ pushHistory(); const [x,z]=nextBouquetSpot(t); const nb=addBouquet(t, b.userData.spec, x, z); if(nb) resolveBouquetOverlap(nb); afterChange(false); }
     else if(act==='del'){ pushHistory(); t.userData.bouquets.remove(b); afterChange(false); }
     else if(act==='edit'){
       const ref={ tableIdx: tables.indexOf(t), bouqIdx: t.userData.bouquets.children.indexOf(b) };
@@ -640,6 +640,22 @@
   });
   addEventListener('pointerdown', (e)=>{ if(!e.target.closest('#objmenu')) closeMenu(); }, true);
 
+  // Мягко раздвинуть букет, чтобы не налезал на другие букеты и тарелки.
+  function resolveBouquetOverlap(b){
+    const t=b.userData.table, fp=b.userData.footprint||12;
+    const others=t.userData.bouquets.children.filter(o=>o!==b);
+    const plates=t.userData.settings.children.filter(c=>c.userData.kind==='setting');
+    for(let iter=0; iter<10; iter++){
+      let moved=false;
+      const push=(ox,oz,need)=>{ let dx=b.position.x-ox, dz=b.position.z-oz, d=Math.hypot(dx,dz);
+        if(d<need){ if(d<0.01){ dx=1; dz=0; d=1; } const k=(need-d); b.position.x+=dx/d*k; b.position.z+=dz/d*k; moved=true; } };
+      others.forEach(o=> push(o.position.x, o.position.z, fp+(o.userData.footprint||12)+2));
+      plates.forEach(p=> push(p.position.x, p.position.z, fp+PLATE_RAD+2));
+      [b.position.x,b.position.z]=clampItem(t, b.position.x, b.position.z);
+      if(!moved) break;
+    }
+  }
+
   // Перенос букета на ближайший стол (кросс-таблица).
   function dropBouquetToNearestTable(b){
     const [wx,wz]=localToWorld(b.userData.table, b.position.x, b.position.z);
@@ -648,6 +664,7 @@
     if(nt!==b.userData.table){ nt.userData.bouquets.add(b); b.userData.table=nt; selectTable(nt); }
     const [lx,lz]=clampItem(nt, ...worldToLocal(nt, wx, wz));
     b.position.x=lx; b.position.z=lz;
+    resolveBouquetOverlap(b);   // мягко раздвигаем, чтобы не налезал
   }
 
   // Двойной клик по столу — камера подлетает к нему (легко переходить между столами).
@@ -727,7 +744,7 @@
     selectTable(tables[0]); afterChange('all');
   });
   document.getElementById('add').addEventListener('click', () => {
-    if(!selected) return; pushHistory(); const [x,z]=nextBouquetSpot(selected); addBouquet(selected, currentSpec, x, z); afterChange(false);
+    if(!selected) return; pushHistory(); const [x,z]=nextBouquetSpot(selected); const nb=addBouquet(selected, currentSpec, x, z); if(nb) resolveBouquetOverlap(nb); afterChange(false);
   });
   document.getElementById('remove').addEventListener('click', () => {
     if(!selected) return; pushHistory(); const bg=selected.userData.bouquets; if(bg.children.length) bg.remove(bg.children[bg.children.length-1]); afterChange(false);
