@@ -118,6 +118,7 @@
 </div>
 <div id="tablemenu">
   <div class="tm-title" id="tm-title">Стол</div>
+  <div id="tm-diagram" class="dg"></div>
   <div id="tm-seatctl"></div>
   <button data-act="seat">🪑 Рассадка гостей</button>
   <button data-act="rotate">↻ Повернуть 45°</button>
@@ -136,6 +137,7 @@
           <button type="button" class="nt-shape" data-shape="rect"><span class="nt-ic">▭</span><b>Банкетный</b><small>240 × 90 см</small></button>
         </div>
       </div>
+      <div id="nt-diagram" class="dg"></div>
       <div id="nt-seats" class="nt-field"><span class="nt-label">Стулья</span><div id="nt-seatrows"></div></div>
       <div class="nt-summary">Всего мест: <b id="nt-total">0</b></div>
     </div>
@@ -689,6 +691,13 @@
     });
     return list;
   }
+  // Для правого клика (контекст-меню) — плюс стулья, чтобы по ним можно было кликнуть,
+  // но НЕ таскать их левой кнопкой (в pickables их нет).
+  function menuPickables(){
+    const list = pickables();
+    tables.forEach(t => t.userData.settings.children.forEach(c => { if (c.userData.kind==='chair') list.push(c); }));
+    return list;
+  }
   const _wp = new THREE.Vector3();
   function onMove(obj, p){
     const t = obj.userData.table;
@@ -741,7 +750,7 @@
     const r=rect(); const crc=new THREE.Raycaster(), cnd=new THREE.Vector2();
     cnd.x=((e.clientX-r.left)/r.width)*2-1; cnd.y=-((e.clientY-r.top)/r.height)*2+1;
     crc.setFromCamera(cnd, camera);
-    const hits=crc.intersectObjects(pickables(), true);
+    const hits=crc.intersectObjects(menuPickables(), true);
     // приоритет: букет → стул → стол
     let bq=null, chair=null, tbl=null;
     for(const h of hits){ let o=h.object; while(o && !(o.userData&&o.userData.table)) o=o.parent;
@@ -792,15 +801,47 @@
     afterChange(false); closeMenu();
   });
 
+  // === Схема стола (вид сверху): показывает стулья по сторонам и подсвечивает нужную ===
+  const SIDE_NAMES = { seatsA:'Сторона 1', seatsB:'Сторона 2', seatsE1:'Торец 1', seatsE2:'Торец 2', seats:'Гости вокруг' };
+  function dgChairs(n, x0,y0,W,H, side, hl){
+    let s=''; const cls = 'dg-chair'+(hl?' hl':'');
+    for(let i=0;i<n;i++){ let x,y,w,h;
+      if(side==='bottom'){ w=13;h=8; x=x0+(i+0.5)/n*W-w/2; y=y0+H+5; }
+      else if(side==='top'){ w=13;h=8; x=x0+(i+0.5)/n*W-w/2; y=y0-5-h; }
+      else if(side==='right'){ w=8;h=13; x=x0+W+5; y=y0+(i+0.5)/n*H-h/2; }
+      else { w=8;h=13; x=x0-5-w; y=y0+(i+0.5)/n*H-h/2; }
+      s+=`<rect class="${cls}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w}" height="${h}" rx="2.5"/>`; }
+    return s;
+  }
+  function renderDiagram(el, ud, hl){
+    if(!el) return;
+    const cap = `<div class="dg-cap${hl?' hl':''}">${hl ? SIDE_NAMES[hl] : (ud.shape==='rect'?'Банкетный стол — наведите на строку':'Круглый стол')}</div>`;
+    if(ud.shape!=='rect'){
+      const n=Math.max(ud.seats||0,0), cx=90,cy=54,R=32; let ch='';
+      for(let i=0;i<n;i++){ const a=i/Math.max(n,1)*Math.PI*2-Math.PI/2, x=cx+Math.cos(a)*(R+12), y=cy+Math.sin(a)*(R+12);
+        ch+=`<circle class="dg-chair${hl==='seats'?' hl':''}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5"/>`; }
+      el.innerHTML=`<svg viewBox="0 0 180 108"><circle class="dg-table" cx="${cx}" cy="${cy}" r="${R}"/>${ch}</svg>`+cap; return;
+    }
+    const W=110,H=42,cx=90,cy=54,x0=cx-W/2,y0=cy-H/2;
+    const a=ud.seatsA||0,b=ud.seatsB||0,e1=ud.seatsE1||0,e2=ud.seatsE2||0;
+    el.innerHTML=`<svg viewBox="0 0 180 108"><rect class="dg-table" x="${x0}" y="${y0}" width="${W}" height="${H}" rx="5"/>`
+      + dgChairs(a,x0,y0,W,H,'bottom',hl==='seatsA') + dgChairs(b,x0,y0,W,H,'top',hl==='seatsB')
+      + dgChairs(e1,x0,y0,W,H,'right',hl==='seatsE1') + dgChairs(e2,x0,y0,W,H,'left',hl==='seatsE2')
+      + `</svg>`+cap;
+  }
+
   // Меню по правому клику на стол.
   let menuTable=null;
-  const seatRow=(label,key,val)=>`<div class="tm-guests">${label}<span class="sp"></span><button data-seat="${key}" data-d="-1">−</button><b>${val}</b><button data-seat="${key}" data-d="1">+</button></div>`;
+  const seatRow=(label,key,val)=>`<div class="tm-guests" data-key="${key}">${label}<span class="sp"></span><button data-seat="${key}" data-d="-1">−</button><b>${val}</b><button data-seat="${key}" data-d="1">+</button></div>`;
   function renderSeatCtl(t){
     document.getElementById('tm-seatctl').innerHTML = isRect(t)
       ? seatRow('Сторона 1','seatsA',t.userData.seatsA) + seatRow('Сторона 2','seatsB',t.userData.seatsB)
         + seatRow('Торец 1','seatsE1',t.userData.seatsE1||0) + seatRow('Торец 2','seatsE2',t.userData.seatsE2||0)
       : seatRow('Гостей','seats',t.userData.seats);
+    renderDiagram(document.getElementById('tm-diagram'), t.userData, null);
   }
+  document.getElementById('tm-seatctl').addEventListener('pointerover', (e)=>{ const r=e.target.closest('[data-key]'); if(menuTable) renderDiagram(document.getElementById('tm-diagram'), menuTable.userData, r?r.dataset.key:null); });
+  document.getElementById('tm-seatctl').addEventListener('pointerout', (e)=>{ if(!e.relatedTarget || !e.relatedTarget.closest('#tm-seatctl')){ if(menuTable) renderDiagram(document.getElementById('tm-diagram'), menuTable.userData, null); } });
   function openTableMenu(t, e){
     menuTable=t; selectTable(t); const m=document.getElementById('tablemenu');
     document.getElementById('tm-title').textContent = t.userData.name ? t.userData.name : ('Стол №'+(tables.indexOf(t)+1));
@@ -927,20 +968,24 @@
   // === Мастер создания стола ===
   const nt = { shape:'round', seats:SEATS_DEFAULT, seatsA:5, seatsB:5, seatsE1:0, seatsE2:0 };
   const ntTotal = () => nt.shape==='round' ? nt.seats : nt.seatsA+nt.seatsB+nt.seatsE1+nt.seatsE2;
-  const ntRow=(label,key,val,max)=>`<div class="nt-step"><span>${label}</span><span class="sp"></span>`+
+  const ntRow=(label,key,val)=>`<div class="nt-step" data-key="${key}"><span>${label}</span><span class="sp"></span>`+
     `<button type="button" data-nt="${key}" data-d="-1" aria-label="меньше">−</button><b>${val}</b>`+
     `<button type="button" data-nt="${key}" data-d="1" aria-label="больше">+</button></div>`;
   function renderNt(){
     document.querySelectorAll('.nt-shape').forEach(b=>b.classList.toggle('on', b.dataset.shape===nt.shape));
     const rows = nt.shape==='round'
-      ? ntRow('Гостей','seats',nt.seats,20)
-      : ntRow('Сторона 1 (длинная)','seatsA',nt.seatsA,12)+ntRow('Сторона 2 (длинная)','seatsB',nt.seatsB,12)
-        +ntRow('Торец 1','seatsE1',nt.seatsE1,2)+ntRow('Торец 2','seatsE2',nt.seatsE2,2);
+      ? ntRow('Гостей','seats',nt.seats)
+      : ntRow('Сторона 1 (длинная)','seatsA',nt.seatsA)+ntRow('Сторона 2 (длинная)','seatsB',nt.seatsB)
+        +ntRow('Торец 1','seatsE1',nt.seatsE1)+ntRow('Торец 2','seatsE2',nt.seatsE2);
     document.getElementById('nt-seatrows').innerHTML = rows;
     document.getElementById('nt-total').textContent = ntTotal();
+    renderDiagram(document.getElementById('nt-diagram'), nt, ntHl);
   }
+  let ntHl=null;
+  document.getElementById('nt-seatrows').addEventListener('pointerover', (e)=>{ const r=e.target.closest('[data-key]'); ntHl=r?r.dataset.key:null; renderDiagram(document.getElementById('nt-diagram'), nt, ntHl); });
+  document.getElementById('nt-seatrows').addEventListener('pointerout', (e)=>{ if(!e.relatedTarget || !e.relatedTarget.closest('#nt-seatrows')){ ntHl=null; renderDiagram(document.getElementById('nt-diagram'), nt, null); } });
   function openNewTable(){
-    nt.shape='round'; nt.seats=SEATS_DEFAULT; nt.seatsA=5; nt.seatsB=5; nt.seatsE1=0; nt.seatsE2=0;
+    nt.shape='round'; nt.seats=SEATS_DEFAULT; nt.seatsA=5; nt.seatsB=5; nt.seatsE1=0; nt.seatsE2=0; ntHl=null;
     renderNt(); document.getElementById('newtable-back').classList.add('show');
   }
   function closeNewTable(){ document.getElementById('newtable-back').classList.remove('show'); }
