@@ -820,11 +820,17 @@
       const n=Math.max(ud.seats||0,0), cx=90,cy=54,R=32; let ch='';
       for(let i=0;i<n;i++){ const a=i/Math.max(n,1)*Math.PI*2-Math.PI/2, x=cx+Math.cos(a)*(R+12), y=cy+Math.sin(a)*(R+12);
         ch+=`<circle class="dg-chair${hl==='seats'?' hl':''}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5"/>`; }
-      el.innerHTML=`<svg viewBox="0 0 180 108"><circle class="dg-table" cx="${cx}" cy="${cy}" r="${R}"/>${ch}</svg>`+cap; return;
+      const ring = hl==='seats' ? `<circle class="dg-edge" cx="${cx}" cy="${cy}" r="${R}" fill="none"/>` : '';
+      el.innerHTML=`<svg viewBox="0 0 180 108"><circle class="dg-table" cx="${cx}" cy="${cy}" r="${R}"/>${ring}${ch}</svg>`+cap; return;
     }
     const W=110,H=42,cx=90,cy=54,x0=cx-W/2,y0=cy-H/2;
     const a=ud.seatsA||0,b=ud.seatsB||0,e1=ud.seatsE1||0,e2=ud.seatsE2||0;
-    el.innerHTML=`<svg viewBox="0 0 180 108"><rect class="dg-table" x="${x0}" y="${y0}" width="${W}" height="${H}" rx="5"/>`
+    // подсветка самой кромки стороны — видно, где сторона/торец, даже если стульев там 0
+    const o=2.5, edge = hl==='seatsA' ? `<line class="dg-edge" x1="${x0}" y1="${y0+H+o}" x2="${x0+W}" y2="${y0+H+o}"/>`
+      : hl==='seatsB' ? `<line class="dg-edge" x1="${x0}" y1="${y0-o}" x2="${x0+W}" y2="${y0-o}"/>`
+      : hl==='seatsE1' ? `<line class="dg-edge" x1="${x0+W+o}" y1="${y0}" x2="${x0+W+o}" y2="${y0+H}"/>`
+      : hl==='seatsE2' ? `<line class="dg-edge" x1="${x0-o}" y1="${y0}" x2="${x0-o}" y2="${y0+H}"/>` : '';
+    el.innerHTML=`<svg viewBox="0 0 180 108"><rect class="dg-table" x="${x0}" y="${y0}" width="${W}" height="${H}" rx="5"/>${edge}`
       + dgChairs(a,x0,y0,W,H,'bottom',hl==='seatsA') + dgChairs(b,x0,y0,W,H,'top',hl==='seatsB')
       + dgChairs(e1,x0,y0,W,H,'right',hl==='seatsE1') + dgChairs(e2,x0,y0,W,H,'left',hl==='seatsE2')
       + `</svg>`+cap;

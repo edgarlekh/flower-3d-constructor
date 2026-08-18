@@ -285,6 +285,7 @@ body.view-only #topbar,body.view-only #panel,body.view-only #tools .tgroup,body.
 .dg-table{fill:var(--accent-soft);stroke:var(--ui-line);stroke-width:1.5}
 .dg-chair{fill:#fff;stroke:var(--ui-line);stroke-width:1;transition:fill .12s,stroke .12s}
 .dg-chair.hl{fill:var(--accent);stroke:var(--accent-deep)}
+.dg-edge{stroke:var(--accent);stroke-width:3.5;stroke-linecap:round;fill:none}
 .dg-cap{text-align:center;font-size:12px;color:var(--ui-muted);margin-top:2px;min-height:16px}
 .dg-cap.hl{color:var(--accent-deep);font-weight:600}
 #tm-diagram{padding:4px 8px 2px}
