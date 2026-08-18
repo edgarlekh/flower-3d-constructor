@@ -54,8 +54,11 @@ body{
 #vasebox{flex:none;border-bottom:1px solid var(--line);padding-bottom:6px}
 .head{padding:16px 16px 12px;border-bottom:1px solid var(--line)}
 .head h1{font-size:26px;font-weight:600;letter-spacing:.01em;margin-top:5px;color:var(--rose-deep)}
+.navrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .head .back{font-size:12px;color:var(--muted);text-decoration:none}
 .head .back:hover{color:var(--rose)}
+.tohall-link{color:var(--rose-deep);font-weight:700;border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--rose-soft)}
+.tohall-link:hover{border-color:var(--rose);background:#fff}
 .head p{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
 .list{overflow-y:auto;flex:1;padding:6px 0 20px}
 .group-title{

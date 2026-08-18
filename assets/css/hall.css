@@ -213,6 +213,25 @@ body.view-only #dock #undo-btn,body.view-only #dock #reset,body.view-only #dock 
 .insp-ai .ai-txt small{font-size:11px;color:var(--ui-muted)}
 /* когда стол не выбран — прячем управление, оставляем только заголовок */
 body:not(.has-sel) #p-diagram,body:not(.has-sel) #p-seatlabel,body:not(.has-sel) #p-seatctl,body:not(.has-sel) .insp-acts,body:not(.has-sel) .insp-ai{display:none}
+/* скрыть/показать инспектор */
+.p-hide{position:absolute;top:9px;right:10px;z-index:2;border:none;background:transparent;color:var(--ui-muted);font-size:11px;font-weight:700;cursor:pointer;padding:4px 7px;border-radius:8px}
+.p-hide:hover{color:var(--accent-deep);background:var(--accent-soft)}
+body.panel-hidden #panel{display:none}
+#panel-show{position:fixed;left:12px;top:74px;z-index:3;display:none;align-items:center;gap:8px;
+  border:1px solid var(--ui-line);background:var(--ui);backdrop-filter:blur(12px);color:var(--ui-text);
+  border-radius:12px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:var(--ui-shadow-sm)}
+#panel-show .ic{width:16px;height:16px}
+#panel-show:hover{border-color:var(--accent);color:var(--accent-deep)}
+body.panel-hidden:not(.walk-mode):not(.view-only) #panel-show{display:inline-flex}
+/* индикатор фиксации зала */
+#lockflag{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:6;display:none;align-items:center;gap:8px;
+  background:var(--gold-soft);border:1px solid var(--gold-line);color:var(--gold);
+  border-radius:999px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:var(--ui-shadow-sm)}
+#lockflag .ic{width:16px;height:16px;stroke:var(--gold)}
+#lockflag b{color:var(--accent-deep);text-decoration:underline;text-underline-offset:2px}
+#lockflag:hover{filter:brightness(.98)}
+body.locked #lockflag{display:flex}
+body.locked #stage{cursor:default}
 #panel .phead{
   display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;
   padding:10px 13px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ui-muted);font-weight:700;
