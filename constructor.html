@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="assets/css/constructor.css?v=2">
+<link rel="stylesheet" href="assets/css/constructor.css?v=3">
 </head>
 <body>
 <div id="app">
@@ -36,7 +36,11 @@
   </section>
 
   <section id="stage">
-    <div id="tools"><button id="variant">Другой вариант укладки</button><button id="relayout">Собрать заново</button><button id="reset">Вернуть вид</button></div>
+    <div id="tools">
+      <button id="variant"><svg class="ic" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>Другой вариант</button>
+      <button id="relayout"><svg class="ic" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Собрать заново</button>
+      <button id="reset"><svg class="ic" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Вернуть вид</button>
+    </div>
     <div id="empty">
       <div>
         <div class="serif">Пусто</div>
@@ -66,7 +70,7 @@
         <span class="label">Итого</span>
         <b id="p-total">0<small> zł</small></b>
       </div>
-      <button id="tohall">Добавить на стол →</button>
+      <button id="tohall"><svg class="ic" viewBox="0 0 24 24"><path d="M4 10h16M4 10 6 5h12l2 5M4 10v9h16v-9M9 14h6"/></svg>Поставить на стол в зале</button>
     </div>
   </section>
 
