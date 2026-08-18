@@ -35,6 +35,16 @@
     </div>
   </div>
   <div class="tgroup">
+    <span class="tlabel">Готовые схемы</span>
+    <select id="preset-select" title="Расставить столы готовой схемой">
+      <option value="">Выбрать схему…</option>
+      <option value="u">Буква П · молодожёны + гости</option>
+      <option value="head">Президиум + круглые столы</option>
+      <option value="rows">Банкет рядами</option>
+      <option value="grid">Круглые столы сеткой</option>
+    </select>
+  </div>
+  <div class="tgroup">
     <span class="tlabel">Композиция</span>
     <button id="add" class="primary">+ Копия букета</button>
     <button id="remove">Убрать букет</button>
@@ -298,7 +308,7 @@
       const near = tables.filter(o=>o!==t)
         .map(o=>({o, d:Math.hypot(o.position.x-t.position.x, o.position.z-t.position.z)}))
         .sort((a,b)=>a.d-b.d).slice(0, DIM_N);
-      near.forEach(({o,d})=>{ const gap=Math.round(d - tableReach(t) - tableReach(o));
+      near.forEach(({o,d})=>{ const gap=tableGap(t, o);
         dims.push({a:new THREE.Vector3(t.position.x,TABLE_H+8,t.position.z), b:new THREE.Vector3(o.position.x,TABLE_H+8,o.position.z), text:`${gap} см`, warn:gap<40}); });
       return dims;
     }
@@ -335,8 +345,8 @@
     let gaps = '';
     if (t){
       { const cs=chairSpacing(t); gaps += prow('Между стульями', cs, cs<0); }
-      let best=Infinity, bo=null; tables.forEach(o=>{ if(o===t)return; const d=Math.hypot(o.position.x-t.position.x, o.position.z-t.position.z); if(d<best){best=d;bo=o;} });
-      if (bo){ const g=Math.round(best - tableReach(t) - tableReach(bo)); gaps += prow('Проход до соседнего стола', g, g<40); }
+      let bestG=Infinity, bo=null; tables.forEach(o=>{ if(o===t)return; const g=tableGap(t,o); if(g<bestG){bestG=g;bo=o;} });
+      if (bo) gaps += prow('Проход до соседнего стола', bestG, bestG<40);
       const bqs=t.userData.bouquets.children, sets=t.userData.settings.children.filter(c=>c.userData.kind==='setting');
       let bp=Infinity; bqs.forEach(b=>{ const fp=b.userData.footprint||12; sets.forEach(s=>{ bp=Math.min(bp, Math.hypot(b.position.x-s.position.x,b.position.z-s.position.z)-fp-PLATE_RAD); }); });
       if (bp<Infinity) gaps += prow('Букет до тарелки (мин.)', Math.round(bp), bp<0);
@@ -434,6 +444,28 @@
   }
   // Габарит «стол+стулья» для проверок и коллизий.
   function tableReach(t){ return isRect(t) ? Math.hypot(t.userData.hl, t.userData.hw)+43 : tR(t)+43; }
+  // Насколько СТОЛЕШНИЦА выступает в заданном направлении (единичный вектор мира) + запас pad.
+  // Для прямоугольного — точная опора повёрнутого габарита (не диагональ!), для круглого — радиус.
+  const CHAIR_HALF = Math.round((TW.chair_cm||45)/2);
+  function tableExtent(t, dx, dz, pad){
+    pad = pad||0;
+    if (!isRect(t)) return tR(t)+pad;
+    const a=t.rotation.y, c=Math.cos(a), s=Math.sin(a);       // оси стола в мире: xhat=(c,-s), zhat=(s,c)
+    return (t.userData.hl+pad)*Math.abs(dx*c - dz*s) + (t.userData.hw+pad)*Math.abs(dx*s + dz*c);
+  }
+  const chairPts = t => { const out=[], v=new THREE.Vector3();
+    t.userData.settings.children.forEach(c=>{ if(c.userData&&c.userData.kind==='chair'){ c.getWorldPosition(v); out.push([v.x,v.z]); } }); return out; };
+  // Реальный проход между двумя столами (см): если столешницы пересеклись — отрицательный;
+  // иначе — расстояние между спинками ближайших стульев (то, где реально ходит гость).
+  function tableGap(a, b){
+    let dx=b.position.x-a.position.x, dz=b.position.z-a.position.z; const d=Math.hypot(dx,dz)||1e-6; dx/=d; dz/=d;
+    const bodyGap = d - tableExtent(a,dx,dz,0) - tableExtent(b,dx,dz,0);   // без стульев — сами столешницы
+    if (bodyGap < 0) return Math.round(bodyGap);                          // тела столов налезли
+    const ca=chairPts(a), cb=chairPts(b); let cg=Infinity;
+    for(const p of ca) for(const q of cb){ const e=Math.hypot(p[0]-q[0],p[1]-q[1]); if(e<cg) cg=e; }
+    cg = isFinite(cg) ? cg - 2*CHAIR_HALF : Infinity;                     // проход между спинками стульев
+    return Math.round(Math.min(bodyGap, cg));
+  }
   // Свободная длина периметра под стулья.
   function seatPerimeter(t){ return isRect(t) ? 4*t.userData.hl : 2*Math.PI*(tR(t)+22); }
   // Зазор между соседними стульями (см). Для банкетного — по каждой стороне; берём тесную.
@@ -832,8 +864,7 @@
   // столы/стулья налезают друг на друга (по всему залу)
   function tableOverlaps(){
     for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){
-      const d = Math.hypot(tables[i].position.x-tables[j].position.x, tables[i].position.z-tables[j].position.z);
-      if (d < tableReach(tables[i]) + tableReach(tables[j])) return true;   // стулья соседних столов налезают
+      if (tableGap(tables[i], tables[j]) < 0) return true;   // стулья соседних столов реально налезают
     }
     return false;
   }
@@ -871,6 +902,41 @@
     scene.remove(selected); tables.splice(tables.indexOf(selected),1);
     selectTable(tables[0]); afterChange('all');
   });
+  // --- готовые схемы расстановки (реальные см, проверены на проход ≥ 80 см и отсутствие столкновений стульев) ---
+  const R90 = Math.PI/2;
+  const PRESETS = {
+    // Буква П: молодожёны за верхним столом лицом к гостям; гости по внешним сторонам «ножек»
+    u: [
+      { shape:'rect', x:0,    z:-210, rot:0,   hl:120, seatsA:4, seatsB:0, name:'Молодожёны' },
+      { shape:'rect', x:-185, z:45,   rot:R90, seatsA:0, seatsB:5 },
+      { shape:'rect', x:185,  z:45,   rot:R90, seatsA:5, seatsB:0 },
+    ],
+    // Президиум (длинный стол молодожёнов) + круглые столы гостей, 2 ряда по 3
+    head: [
+      { shape:'rect',  x:0,    z:-250, rot:0, hl:140, seatsA:6, seatsB:0, name:'Президиум' },
+      { shape:'round', x:-330, z:60,  seats:8 }, { shape:'round', x:0, z:60,  seats:8 }, { shape:'round', x:330, z:60,  seats:8 },
+      { shape:'round', x:-330, z:390, seats:8 }, { shape:'round', x:0, z:390, seats:8 }, { shape:'round', x:330, z:390, seats:8 },
+    ],
+    // Банкет рядами — длинные столы параллельно, гости с обеих сторон (проход 90 см)
+    rows: [
+      { shape:'rect', x:-270, z:0, rot:R90, seatsA:5, seatsB:5 },
+      { shape:'rect', x:0,    z:0, rot:R90, seatsA:5, seatsB:5 },
+      { shape:'rect', x:270,  z:0, rot:R90, seatsA:5, seatsB:5 },
+    ],
+    // Круглые столы сеткой 3×3 (центры через 330 см → проход 90 см)
+    grid: (function(){ const a=[]; for(let r=0;r<3;r++)for(let c=0;c<3;c++) a.push({ shape:'round', x:(c-1)*330, z:(r-1)*330, seats:8 }); return a; })(),
+  };
+  function hasWork(){ return tables.some(t => t.userData.bouquets.children.length || (t.userData.guests||[]).some(Boolean) || t.userData.name); }
+  function applyPreset(name){
+    const spec = PRESETS[name]; if(!spec) return;
+    if ((tables.length>1 || hasWork()) && !confirm('Заменить текущую расстановку готовой схемой? Столы и рассадка будут пересозданы.')) return;
+    pushHistory();
+    tables.slice().forEach(t => scene.remove(t)); tables.length=0;
+    // букет-центр — на круглые и на длинные столы президиума/молодожёнов (там он не давит тарелки)
+    spec.forEach(d => { const withBq = d.shape!=='rect' || d.hl; createTable(Object.assign({ bouquets: withBq?[{ spec:currentSpec, x:0, z:0 }]:[] }, d)); });
+    selectTable(tables[0]); afterChange('all');
+  }
+  document.getElementById('preset-select').addEventListener('change', (e)=>{ const v=e.target.value; e.target.value=''; applyPreset(v); });
   document.getElementById('add').addEventListener('click', () => {
     if(!selected) return; pushHistory(); const [x,z]=nextBouquetSpot(selected); const nb=addBouquet(selected, currentSpec, x, z); if(nb) resolveBouquetOverlap(nb); afterChange(false);
   });
@@ -1113,7 +1179,7 @@
 
   window.hallDebug = { scene, camera, cam, tables, get selected(){return selected;}, createTable, addBouquet, computeWarnings, drag, TABLE_R, TABLE_H, pickables,
     enterWalk, exitWalk, sitAt, updateWalk, walk, keys, get mode(){return mode;},
-    dropBouquetToNearestTable, openBouquetMenu, openSeating, updateGuestNames, openTableMenu, openChairMenu, setRectSides, chairSpacing };
+    dropBouquetToNearestTable, openBouquetMenu, openSeating, updateGuestNames, openTableMenu, openChairMenu, setRectSides, chairSpacing, tableGap, tableExtent };
 })();
 </script>
 </body>
