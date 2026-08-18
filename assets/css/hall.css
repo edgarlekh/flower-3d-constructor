@@ -146,6 +146,8 @@ body.walk-mode #tools,body.walk-mode #panel,body.walk-mode #hint,body.walk-mode 
 #tablemenu.show{display:flex}
 #tablemenu .tm-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ui-muted);font-weight:700;padding:6px 11px 4px}
 #tablemenu .tm-guests{display:flex;align-items:center;gap:6px;padding:4px 11px 8px;font-size:13px;color:var(--ui-text);border-bottom:1px solid var(--ui-line);margin-bottom:4px}
+#tablemenu #tm-seatctl .tm-guests:not(:last-child){border-bottom:none;margin-bottom:0;padding-bottom:2px}
+#tablemenu #tm-seatctl .tm-guests{font-size:12.5px}
 #tablemenu .tm-guests .sp{flex:1}
 #tablemenu .tm-guests b{min-width:20px;text-align:center;font-variant-numeric:tabular-nums}
 #tablemenu .tm-guests button{width:26px;height:26px;border-radius:7px;border:1px solid var(--ui-line);background:#fff;color:var(--ui-text);cursor:pointer;font-size:15px}
