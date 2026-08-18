@@ -20,10 +20,10 @@
 <div id="tools">
   <div class="tgroup">
     <span class="tlabel">Столы</span>
-    <button id="add-table" class="primary">+ Круглый ⌀150</button>
-    <button id="add-rect">+ Банкетный 240×90</button>
+    <button id="add-table" class="primary">+ Добавить стол</button>
     <button id="copy-table">Копия стола</button>
     <button id="del-table" class="danger">Удалить стол</button>
+    <button id="lock-btn" title="Заблокировать расстановку, чтобы не сдвинуть случайно">🔒 Зафиксировать зал</button>
     <div class="cloth-row" id="cloth-colors">
       <span class="tlabel" style="padding:0">Скатерть</span>
       <button class="swatch" data-cloth="F3EEE6" style="background:#F3EEE6" title="Айвори"></button>
@@ -124,6 +124,26 @@
   <button data-act="rename">✎ Переименовать</button>
   <button data-act="copy">⧉ Копия стола</button>
   <button data-act="del" class="del">🗑 Удалить стол</button>
+</div>
+<div id="newtable-back" class="modal-back" role="dialog" aria-modal="true" aria-labelledby="nt-h">
+  <div id="newtable">
+    <div class="nt-head"><span id="nt-h">Новый стол</span><button id="nt-x" aria-label="Закрыть">✕</button></div>
+    <div class="nt-body">
+      <div class="nt-field">
+        <span class="nt-label">Форма стола</span>
+        <div class="nt-shapes">
+          <button type="button" class="nt-shape" data-shape="round"><span class="nt-ic">◯</span><b>Круглый</b><small>⌀ 150 см</small></button>
+          <button type="button" class="nt-shape" data-shape="rect"><span class="nt-ic">▭</span><b>Банкетный</b><small>240 × 90 см</small></button>
+        </div>
+      </div>
+      <div id="nt-seats" class="nt-field"><span class="nt-label">Стулья</span><div id="nt-seatrows"></div></div>
+      <div class="nt-summary">Всего мест: <b id="nt-total">0</b></div>
+    </div>
+    <div class="nt-foot">
+      <button type="button" id="nt-cancel">Отмена</button>
+      <button type="button" id="nt-ok" class="primary">Поставить стол</button>
+    </div>
+  </div>
 </div>
 <div id="loader" class="scene-loader"><div class="spin"></div>Накрываем столы…</div>
 
@@ -420,10 +440,15 @@
   function seatDescriptors(t){
     const seats=t.userData.seats, out=[];
     if (isRect(t)){
-      const hl=t.userData.hl, hw=t.userData.hw, na=t.userData.seatsA||0, nb=t.userData.seatsB||0;
+      const hl=t.userData.hl, hw=t.userData.hw;
+      const na=t.userData.seatsA||0, nb=t.userData.seatsB||0, ne1=t.userData.seatsE1||0, ne2=t.userData.seatsE2||0;
+      // длинные стороны (±z)
       const side=(n,s)=>{ for(let i=0;i<n;i++){ const x=-hl + (i+0.5)/n*(2*hl);
         out.push({ px:x, pz:s*(hw-15), cx:x, cz:s*(hw+22), srot:s>0?Math.PI:0, crot:s>0?Math.PI:0 }); } };
-      side(na,+1); side(nb,-1);
+      // торцы (±x) — стул смотрит вдоль длины стола
+      const end=(n,s)=>{ for(let i=0;i<n;i++){ const z=-hw + (i+0.5)/n*(2*hw); const rot=s>0?Math.PI/2:-Math.PI/2;
+        out.push({ px:s*(hl-15), pz:z, cx:s*(hl+22), cz:z, srot:rot, crot:rot }); } };
+      side(na,+1); side(nb,-1); end(ne1,+1); end(ne2,-1);
     } else {
       const R=tR(t);
       for(let i=0;i<seats;i++){ const a=i/seats*Math.PI*2-Math.PI/2, c=Math.cos(a), s=Math.sin(a);
@@ -470,11 +495,17 @@
   function seatPerimeter(t){ return isRect(t) ? 4*t.userData.hl : 2*Math.PI*(tR(t)+22); }
   // Зазор между соседними стульями (см). Для банкетного — по каждой стороне; берём тесную.
   function chairSpacing(t){
-    if (isRect(t)){ const g=[t.userData.seatsA,t.userData.seatsB].filter(n=>n>=2).map(n=> (2*t.userData.hl)/n - 45);
+    if (isRect(t)){ const L=2*t.userData.hl, W=2*t.userData.hw;
+      const g=[]; if((t.userData.seatsA||0)>=2) g.push(L/t.userData.seatsA-45); if((t.userData.seatsB||0)>=2) g.push(L/t.userData.seatsB-45);
+      if((t.userData.seatsE1||0)>=2) g.push(W/t.userData.seatsE1-45); if((t.userData.seatsE2||0)>=2) g.push(W/t.userData.seatsE2-45);
       return g.length ? Math.round(Math.min(...g)) : null; }
     const seats=Math.max(t.userData.seats,1); return Math.round(2*Math.PI*(tR(t)+22)/seats - 45); }
-  // Задать число стульев по сторонам банкетного стола (a — одна длинная сторона, b — другая).
-  function setRectSides(t, a, b){ t.userData.seatsA=Math.max(0,a); t.userData.seatsB=Math.max(0,b); t.userData.seats=t.userData.seatsA+t.userData.seatsB; buildSettings(t); }
+  // Пересчитать общее число мест банкетного стола из сторон.
+  function rectTotal(t){ return (t.userData.seatsA||0)+(t.userData.seatsB||0)+(t.userData.seatsE1||0)+(t.userData.seatsE2||0); }
+  // Задать число стульев по стороне банкетного стола: key ∈ seatsA|seatsB|seatsE1|seatsE2.
+  function setRectSeats(t, key, n){ const cap=key.startsWith('seatsE')?2:12; t.userData[key]=Math.max(0,Math.min(cap,n)); t.userData.seats=rectTotal(t); buildSettings(t); }
+  // Совместимость: две длинные стороны разом.
+  function setRectSides(t, a, b){ t.userData.seatsA=Math.max(0,a); t.userData.seatsB=Math.max(0,b); t.userData.seats=rectTotal(t); buildSettings(t); }
   // Мир↔локаль с учётом поворота стола (rotation.y).
   function localToWorld(t,lx,lz){ const a=t.rotation.y,c=Math.cos(a),s=Math.sin(a); return [t.position.x + c*lx + s*lz, t.position.z - s*lx + c*lz]; }
   function worldToLocal(t,wx,wz){ const a=t.rotation.y,c=Math.cos(a),s=Math.sin(a),dx=wx-t.position.x,dz=wz-t.position.z; return [c*dx - s*dz, s*dx + c*dz]; }
@@ -510,6 +541,7 @@
   let currentSpec = DEFAULT;
   let mode = 'edit';                    // 'edit' — редактор, 'walk' — прогулка гостя
   let viewOnly = false;                 // открыто по ссылке клиентом — без редактирования
+  let locked = false;                   // расстановка зафиксирована — ничего не двигается
   const encHall = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
   const decHall = s => JSON.parse(decodeURIComponent(escape(atob(s))));
 
@@ -557,10 +589,12 @@
     const shape = data.shape==='rect' ? 'rect' : 'round';
     t.userData = { kind:'table', shape, seats: data.seats||SEATS_DEFAULT, name: data.name||'', guests: Array.isArray(data.guests)?data.guests.slice():[] };
     if (shape==='rect'){
-      // число стульев на каждую длинную сторону (для «П» одну сторону = 0)
+      // стулья по сторонам: A/B — длинные, E1/E2 — торцы (для «П» лишние стороны = 0)
       let a=data.seatsA, b=data.seatsB;
       if(a==null||b==null){ const s=data.seats||8; a=Math.ceil(s/2); b=s-a; }   // миграция старого seats
-      t.userData.seatsA=a; t.userData.seatsB=b; t.userData.seats=a+b;
+      t.userData.seatsA=a; t.userData.seatsB=b;
+      t.userData.seatsE1=data.seatsE1||0; t.userData.seatsE2=data.seatsE2||0;
+      t.userData.seats=rectTotal(t);
     }
     if (shape==='rect'){
       const hl=t.userData.hl = data.hl||RECT_HL, hw=t.userData.hw = data.hw||RECT_HW;
@@ -592,7 +626,8 @@
     return {
       x:+t.position.x.toFixed(1), z:+t.position.z.toFixed(1), seats:t.userData.seats,
       shape:t.userData.shape, hl:t.userData.hl, hw:t.userData.hw, R:t.userData.R,
-      rot:+t.rotation.y.toFixed(3), name:t.userData.name||'', guests:(t.userData.guests||[]).slice(0,t.userData.seats), seatsA:t.userData.seatsA, seatsB:t.userData.seatsB,
+      rot:+t.rotation.y.toFixed(3), name:t.userData.name||'', guests:(t.userData.guests||[]).slice(0,t.userData.seats),
+      seatsA:t.userData.seatsA, seatsB:t.userData.seatsB, seatsE1:t.userData.seatsE1, seatsE2:t.userData.seatsE2,
       bouquets: t.userData.bouquets.children.map(b=>({ spec:b.userData.spec, x:+b.position.x.toFixed(1), z:+b.position.z.toFixed(1) })),
       settings: t.userData.settings.children.filter(c=>c.userData.kind==='setting')
                  .map(s=>({ x:+s.position.x.toFixed(1), z:+s.position.z.toFixed(1), rot:+s.rotation.y.toFixed(3) })),
@@ -681,7 +716,7 @@
     getPickables: pickables,
     planeMode: 'horizontal',
     getAnchor: (o) => o.userData.kind==='table' ? o.userData.table.position : o.getWorldPosition(_wp),
-    canGrab: () => mode==='edit' && !viewOnly,
+    canGrab: () => mode==='edit' && !viewOnly && !locked,
     setCameraPaused: (v) => cam.setPaused(v),
     moveTo: onMove,
     onGrab: (o) => { selectTable(o.userData.table);
@@ -700,7 +735,7 @@
   renderer.domElement.addEventListener('pointerdown', e=>{ if(e.button===2) rdown={x:e.clientX,y:e.clientY}; });
   renderer.domElement.addEventListener('contextmenu', e=>{
     e.preventDefault();
-    if(mode!=='edit' || viewOnly){ closeMenu(); return; }
+    if(mode!=='edit' || viewOnly || locked){ closeMenu(); return; }
     const moved = rdown && Math.hypot(e.clientX-rdown.x, e.clientY-rdown.y) > 6; rdown=null;
     if(moved){ return; }                     // это была панорама правой кнопкой — не меню
     const r=rect(); const crc=new THREE.Raycaster(), cnd=new THREE.Vector2();
@@ -733,7 +768,10 @@
 
   // Меню по правому клику на стул: убрать этот / добавить ещё на эту сторону.
   let menuChair=null;
-  function chairSide(ch){ const t=ch.userData.table; return isRect(t) ? (ch.userData.seatIdx < t.userData.seatsA ? 'A' : 'B') : null; }
+  // По индексу места определяем сторону банкетного стола: seatsA|seatsB|seatsE1|seatsE2.
+  function chairSide(ch){ const t=ch.userData.table; if(!isRect(t)) return null;
+    const a=t.userData.seatsA||0, b=t.userData.seatsB||0, e1=t.userData.seatsE1||0, i=ch.userData.seatIdx;
+    if(i<a) return 'seatsA'; if(i<a+b) return 'seatsB'; if(i<a+b+e1) return 'seatsE1'; return 'seatsE2'; }
   function openChairMenu(ch, e){
     menuChair=ch; const m=document.getElementById('chairmenu');
     const x=(e&&e.clientX)||200, y=(e&&e.clientY)||200;
@@ -745,10 +783,10 @@
     const act=e.target.dataset.act; if(!act||!menuChair) return; const ch=menuChair, t=ch.userData.table, s=chairSide(ch);
     pushHistory();
     if(act==='chair-del'){
-      if(isRect(t)) setRectSides(t, t.userData.seatsA-(s==='A'?1:0), t.userData.seatsB-(s==='B'?1:0));
+      if(isRect(t)) setRectSeats(t, s, (t.userData[s]||0)-1);
       else { t.userData.seats=Math.max(0,t.userData.seats-1); buildSettings(t); }
     } else if(act==='chair-add'){
-      if(isRect(t)) setRectSides(t, t.userData.seatsA+(s==='A'?1:0), t.userData.seatsB+(s==='B'?1:0));
+      if(isRect(t)) setRectSeats(t, s, (t.userData[s]||0)+1);
       else { t.userData.seats=t.userData.seats+1; buildSettings(t); }
     }
     afterChange(false); closeMenu();
@@ -756,11 +794,12 @@
 
   // Меню по правому клику на стол.
   let menuTable=null;
-  const seatRow=(label,minus,val,plus)=>`<div class="tm-guests">${label}<span class="sp"></span><button data-act="${minus}">−</button><b>${val}</b><button data-act="${plus}">+</button></div>`;
+  const seatRow=(label,key,val)=>`<div class="tm-guests">${label}<span class="sp"></span><button data-seat="${key}" data-d="-1">−</button><b>${val}</b><button data-seat="${key}" data-d="1">+</button></div>`;
   function renderSeatCtl(t){
     document.getElementById('tm-seatctl').innerHTML = isRect(t)
-      ? seatRow('Стулья · сторона 1','a-',t.userData.seatsA,'a+') + seatRow('сторона 2','b-',t.userData.seatsB,'b+')
-      : seatRow('Гостей','g-',t.userData.seats,'g+');
+      ? seatRow('Сторона 1','seatsA',t.userData.seatsA) + seatRow('Сторона 2','seatsB',t.userData.seatsB)
+        + seatRow('Торец 1','seatsE1',t.userData.seatsE1||0) + seatRow('Торец 2','seatsE2',t.userData.seatsE2||0)
+      : seatRow('Гостей','seats',t.userData.seats);
   }
   function openTableMenu(t, e){
     menuTable=t; selectTable(t); const m=document.getElementById('tablemenu');
@@ -771,15 +810,15 @@
     document.getElementById('objmenu').classList.remove('show'); m.classList.add('show');
   }
   document.getElementById('tablemenu').addEventListener('click', (e)=>{
-    const act=e.target.dataset.act; if(!act||!menuTable) return; const t=menuTable;
+    const t=menuTable; if(!t) return;
+    const seatKey=e.target.dataset.seat;
+    if(seatKey){ pushHistory(); const d=+e.target.dataset.d;
+      if(seatKey==='seats'){ t.userData.seats=Math.max(2,Math.min(20,t.userData.seats+d)); buildSettings(t); }
+      else setRectSeats(t, seatKey, (t.userData[seatKey]||0)+d);
+      renderSeatCtl(t); afterChange(false); return; }
+    const act=e.target.dataset.act; if(!act) return;
     if(act==='seat'){ closeMenu(); openSeating(t); return; }
     else if(act==='rotate'){ pushHistory(); t.rotation.y += Math.PI/4; selectTable(t); saveHall(); }
-    else if(act==='g-'){ pushHistory(); t.userData.seats=Math.max(2,t.userData.seats-1); buildSettings(t); renderSeatCtl(t); afterChange(false); return; }
-    else if(act==='g+'){ pushHistory(); t.userData.seats=Math.min(20,t.userData.seats+1); buildSettings(t); renderSeatCtl(t); afterChange(false); return; }
-    else if(act==='a-'){ pushHistory(); setRectSides(t, t.userData.seatsA-1, t.userData.seatsB); renderSeatCtl(t); afterChange(false); return; }
-    else if(act==='a+'){ pushHistory(); setRectSides(t, t.userData.seatsA+1, t.userData.seatsB); renderSeatCtl(t); afterChange(false); return; }
-    else if(act==='b-'){ pushHistory(); setRectSides(t, t.userData.seatsA, t.userData.seatsB-1); renderSeatCtl(t); afterChange(false); return; }
-    else if(act==='b+'){ pushHistory(); setRectSides(t, t.userData.seatsA, t.userData.seatsB+1); renderSeatCtl(t); afterChange(false); return; }
     else if(act==='rename'){ const n=prompt('Название стола:', t.userData.name||('Стол №'+(tables.indexOf(t)+1))); if(n!==null){ t.userData.name=n.trim(); afterChange(false); } }
     else if(act==='copy'){ pushHistory(); const d=tableData(t); const [x,z]=freeSpot(); const nt=createTable(Object.assign({},d,{x,z})); selectTable(nt); afterChange('table'); }
     else if(act==='del'){ if(tables.length>1){ pushHistory(); scene.remove(t); tables.splice(tables.indexOf(t),1); selectTable(tables[0]); afterChange('all'); } }
@@ -878,30 +917,73 @@
     document.getElementById('empty').style.display = tables.length ? 'none' : 'grid';
   }
   function saveHall(){
-    try { localStorage.setItem(HALL_KEY, JSON.stringify({ tables: tables.map(tableData) })); } catch(_){}
+    try { localStorage.setItem(HALL_KEY, JSON.stringify({ tables: tables.map(tableData), locked })); } catch(_){}
   }
 
   // --- кнопки ---
   function afterChange(frame){ updateReadout(); renderWarnings(); saveHall();
     if(frame==='all') frameAll(); else if(frame==='table' && selected) frameTable(selected); }
 
-  function addTableShape(shape){
-    pushHistory();
-    const [x,z]=freeSpot();
-    const t=createTable({ x, z, shape, seats: shape==='rect'?8:SEATS_DEFAULT, bouquets:[{spec:currentSpec,x:0,z:0}] });
-    selectTable(t); afterChange('table');
+  // === Мастер создания стола ===
+  const nt = { shape:'round', seats:SEATS_DEFAULT, seatsA:5, seatsB:5, seatsE1:0, seatsE2:0 };
+  const ntTotal = () => nt.shape==='round' ? nt.seats : nt.seatsA+nt.seatsB+nt.seatsE1+nt.seatsE2;
+  const ntRow=(label,key,val,max)=>`<div class="nt-step"><span>${label}</span><span class="sp"></span>`+
+    `<button type="button" data-nt="${key}" data-d="-1" aria-label="меньше">−</button><b>${val}</b>`+
+    `<button type="button" data-nt="${key}" data-d="1" aria-label="больше">+</button></div>`;
+  function renderNt(){
+    document.querySelectorAll('.nt-shape').forEach(b=>b.classList.toggle('on', b.dataset.shape===nt.shape));
+    const rows = nt.shape==='round'
+      ? ntRow('Гостей','seats',nt.seats,20)
+      : ntRow('Сторона 1 (длинная)','seatsA',nt.seatsA,12)+ntRow('Сторона 2 (длинная)','seatsB',nt.seatsB,12)
+        +ntRow('Торец 1','seatsE1',nt.seatsE1,2)+ntRow('Торец 2','seatsE2',nt.seatsE2,2);
+    document.getElementById('nt-seatrows').innerHTML = rows;
+    document.getElementById('nt-total').textContent = ntTotal();
   }
-  document.getElementById('add-table').addEventListener('click', () => addTableShape('round'));
-  document.getElementById('add-rect').addEventListener('click', () => addTableShape('rect'));
+  function openNewTable(){
+    nt.shape='round'; nt.seats=SEATS_DEFAULT; nt.seatsA=5; nt.seatsB=5; nt.seatsE1=0; nt.seatsE2=0;
+    renderNt(); document.getElementById('newtable-back').classList.add('show');
+  }
+  function closeNewTable(){ document.getElementById('newtable-back').classList.remove('show'); }
+  document.querySelectorAll('.nt-shape').forEach(b=> b.addEventListener('click', ()=>{ nt.shape=b.dataset.shape; renderNt(); }));
+  document.getElementById('nt-seatrows').addEventListener('click', (e)=>{
+    const key=e.target.dataset.nt; if(!key) return; const d=+e.target.dataset.d;
+    const cap = key==='seats'?20 : key.startsWith('seatsE')?2:12, min = key==='seats'?2:0;
+    nt[key]=Math.max(min, Math.min(cap, nt[key]+d)); renderNt();
+  });
+  function confirmNewTable(){
+    pushHistory(); const [x,z]=freeSpot();
+    const d = { x, z, shape:nt.shape, bouquets:[{spec:currentSpec,x:0,z:0}] };
+    if(nt.shape==='round') d.seats=nt.seats;
+    else { d.seatsA=nt.seatsA; d.seatsB=nt.seatsB; d.seatsE1=nt.seatsE1; d.seatsE2=nt.seatsE2; }
+    const t=createTable(d); selectTable(t); afterChange('table'); closeNewTable();
+  }
+  document.getElementById('add-table').addEventListener('click', openNewTable);
+  document.getElementById('nt-ok').addEventListener('click', confirmNewTable);
+  document.getElementById('nt-cancel').addEventListener('click', closeNewTable);
+  document.getElementById('nt-x').addEventListener('click', closeNewTable);
+  document.getElementById('newtable-back').addEventListener('click', (e)=>{ if(e.target.id==='newtable-back') closeNewTable(); });
+  addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeNewTable(); });
   document.getElementById('copy-table').addEventListener('click', () => {
-    if(!selected) return; pushHistory(); const d=tableData(selected); const [x,z]=freeSpot();
+    if(!selected || locked) return; pushHistory(); const d=tableData(selected); const [x,z]=freeSpot();
     const t=createTable(Object.assign({}, d, {x,z})); selectTable(t); afterChange('table');
   });
   document.getElementById('del-table').addEventListener('click', () => {
-    if(!selected || tables.length<=1) return; pushHistory();
+    if(!selected || tables.length<=1 || locked) return; pushHistory();
     scene.remove(selected); tables.splice(tables.indexOf(selected),1);
     selectTable(tables[0]); afterChange('all');
   });
+  // --- фиксация расстановки (блок мис-кликов) ---
+  function updateLockUI(){
+    const b=document.getElementById('lock-btn');
+    b.textContent = locked ? '🔓 Разблокировать' : '🔒 Зафиксировать зал';
+    b.classList.toggle('on', locked);
+    document.body.classList.toggle('locked', locked);
+    document.getElementById('hint').textContent = locked
+      ? 'Расстановка зафиксирована — ничего не сдвинуть. Нажмите «Разблокировать», чтобы менять.'
+      : 'Тяните букет/тарелку · скатерть — весь стол · правый клик по столу — стулья по сторонам, рассадка, поворот · двойной клик — подлететь';
+  }
+  function setLocked(v){ locked=v; if(locked) closeMenu(); updateLockUI(); saveHall(); }
+  document.getElementById('lock-btn').addEventListener('click', () => setLocked(!locked));
   // --- готовые схемы расстановки (реальные см, проверены на проход ≥ 80 см и отсутствие столкновений стульев) ---
   const R90 = Math.PI/2;
   const PRESETS = {
@@ -1150,12 +1232,13 @@
   } else {
     const saved = readJSON(HALL_KEY);
     if (Array.isArray(saved)) list = [{ seats:SEATS_DEFAULT, bouquets:saved }];
-    else if (saved && Array.isArray(saved.tables)) list = saved.tables;
+    else if (saved && Array.isArray(saved.tables)){ list = saved.tables; locked = !!saved.locked; }
     else if (saved && Array.isArray(saved.bouquets)) list = [{ seats:saved.seats||SEATS_DEFAULT, bouquets:saved.bouquets }];
   }
   if (list) list.forEach(d => createTable(d));
   if (!tables.length) createTable({ x:0, z:0, seats:SEATS_DEFAULT, bouquets:[] });
   selectTable(tables[0]);
+  if (!viewOnly) updateLockUI();
 
   if (!viewOnly){
     const pending = readJSON(PENDING_KEY);
@@ -1179,7 +1262,8 @@
 
   window.hallDebug = { scene, camera, cam, tables, get selected(){return selected;}, createTable, addBouquet, computeWarnings, drag, TABLE_R, TABLE_H, pickables,
     enterWalk, exitWalk, sitAt, updateWalk, walk, keys, get mode(){return mode;},
-    dropBouquetToNearestTable, openBouquetMenu, openSeating, updateGuestNames, openTableMenu, openChairMenu, setRectSides, chairSpacing, tableGap, tableExtent };
+    dropBouquetToNearestTable, openBouquetMenu, openSeating, updateGuestNames, openTableMenu, openChairMenu, setRectSides, setRectSeats, chairSpacing, tableGap, tableExtent,
+    openNewTable, confirmNewTable, nt, get locked(){return locked;}, setLocked };
 })();
 </script>
 </body>

@@ -279,3 +279,57 @@ body.view-only #topbar,body.view-only #panel,body.view-only #tools .tgroup,body.
 #empty .serif{font-size:22px;color:#8C8880;font-weight:400}
 #empty p{font-size:13px;color:#A5A199;margin-top:8px}
 #empty a{pointer-events:auto;color:var(--rose)}
+
+/* кнопка «Зафиксировать зал» */
+#tools > button#lock-btn{width:100%;margin-top:2px}
+#tools > button#lock-btn.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-deep);font-weight:600}
+body.locked #stage{cursor:default}
+
+/* === Мастер создания стола (модалка) === */
+.modal-back{
+  position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;padding:20px;
+  background:rgba(40,30,24,.34);backdrop-filter:blur(3px);
+}
+.modal-back.show{display:flex;animation:nt-fade .16s ease}
+@keyframes nt-fade{from{opacity:0}to{opacity:1}}
+#newtable{
+  width:340px;max-width:100%;max-height:90vh;overflow:auto;color:var(--ui-text);
+  background:var(--ui);backdrop-filter:blur(14px);border:1px solid var(--ui-line);
+  border-radius:18px;box-shadow:0 24px 60px rgba(40,28,20,.34);
+  animation:nt-pop .18s cubic-bezier(.2,.9,.3,1.2);
+}
+@keyframes nt-pop{from{transform:translateY(10px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+.nt-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px}
+.nt-head span{font-family:Georgia,serif;font-size:19px;font-weight:500}
+.nt-head button{border:none;background:transparent;color:var(--ui-muted);font-size:17px;cursor:pointer;line-height:1;padding:4px;border-radius:8px}
+.nt-head button:hover{background:var(--accent-soft);color:var(--accent-deep)}
+.nt-body{padding:4px 18px 8px;display:flex;flex-direction:column;gap:16px}
+.nt-field{display:flex;flex-direction:column;gap:9px}
+.nt-label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ui-muted);font-weight:700}
+.nt-shapes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.nt-shape{
+  display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 8px;cursor:pointer;
+  border:1.5px solid var(--ui-line);background:#fff;border-radius:14px;color:var(--ui-text);transition:border-color .12s,background .12s,box-shadow .12s;
+}
+.nt-shape .nt-ic{font-size:26px;line-height:1;color:var(--ui-muted)}
+.nt-shape b{font-size:14px;font-weight:600}
+.nt-shape small{font-size:11px;color:var(--ui-muted)}
+.nt-shape:hover{border-color:var(--accent)}
+.nt-shape.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 3px rgba(181,101,74,.12)}
+.nt-shape.on .nt-ic{color:var(--accent-deep)}
+#nt-seatrows{display:flex;flex-direction:column;gap:8px}
+.nt-step{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.nt-step .sp{flex:1}
+.nt-step b{min-width:26px;text-align:center;font-variant-numeric:tabular-nums;font-size:15px}
+.nt-step button{
+  width:34px;height:34px;border-radius:9px;border:1px solid var(--ui-line);background:#fff;color:var(--ui-text);
+  cursor:pointer;font-size:18px;line-height:1;display:grid;place-items:center;transition:border-color .12s,color .12s;
+}
+.nt-step button:hover{border-color:var(--accent);color:var(--accent)}
+.nt-summary{font-size:13px;color:var(--ui-muted);padding-top:2px}
+.nt-summary b{color:var(--ui-text);font-size:15px;font-variant-numeric:tabular-nums}
+.nt-foot{display:flex;gap:10px;padding:12px 18px 18px}
+.nt-foot button{flex:1;padding:11px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;border:1px solid var(--ui-line);background:#fff;color:var(--ui-text)}
+.nt-foot button:hover{border-color:var(--accent);color:var(--accent)}
+.nt-foot button.primary{border-color:transparent;background:var(--accent);color:#fff;box-shadow:0 6px 18px rgba(181,101,74,.32)}
+.nt-foot button.primary:hover{background:var(--accent-deep);color:#fff}
