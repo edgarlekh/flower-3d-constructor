@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>План зала — вид сверху</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap">
+<style>
+:root{
+  --bg1:#FFFFFF; --bg2:#FBF1F5; --bg3:#F0DEE8;
+  --panel:rgba(255,255,255,.95); --line:#F0D3E1; --line-soft:#F8E7EF;
+  --ink:#5C2038; --ink2:#9A6B82;
+  --rose:#DB2777; --rose-deep:#9D174D; --rose-soft:#FCE7F3;
+  --gold:#A16207; --gold-soft:#F6E7C6; --gold-line:#E4C98A;
+  --shadow:0 16px 44px rgba(120,30,70,.16);
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --serif:"Cormorant Garamond",Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 100% at 50% -10%,var(--bg1),var(--bg2) 55%,var(--bg3));overflow:hidden}
+#top{position:fixed;left:0;right:0;top:0;height:56px;z-index:10;display:flex;align-items:center;gap:14px;padding:0 16px;background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.4))}
+#top .brand{font-family:var(--serif);font-size:24px;font-weight:600;color:var(--rose-deep);line-height:1}
+#top .brand small{display:block;font-family:var(--sans);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink2);font-weight:700}
+#top a.nav{font-size:12.5px;color:var(--ink2);text-decoration:none;font-weight:600}
+#top a.nav:hover{color:var(--rose)}
+#top .sp{flex:1}
+#top .to3d{display:inline-flex;align-items:center;gap:8px;border:none;background:linear-gradient(180deg,#E84E9C,var(--rose));color:#fff;border-radius:11px;padding:10px 15px;font-size:13.5px;font-weight:600;cursor:pointer;box-shadow:0 8px 20px rgba(219,39,119,.3);text-decoration:none}
+.floor{position:fixed;inset:56px 0 0 0;touch-action:none;display:block;width:100%;height:calc(100% - 56px);
+  background:radial-gradient(90% 90% at 50% 40%,#fff,#FCF1F6 70%,#F3E1EA)}
+#bar{position:fixed;top:66px;left:12px;z-index:8;display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:calc(100% - 24px)}
+#bar button,#bar select{border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(10px);color:var(--ink);border-radius:11px;padding:8px 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(120,30,70,.08)}
+#bar button{display:inline-flex;align-items:center;gap:7px}
+#bar button:hover{border-color:var(--rose);color:var(--rose-deep)}
+#bar button.on{border-color:var(--gold);background:var(--gold-soft);color:var(--gold)}
+#bar .ic{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.badge{position:fixed;top:66px;right:14px;z-index:8;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);background:var(--gold-soft);border:1px solid var(--gold-line);border-radius:999px;padding:5px 13px}
+.hint{position:fixed;bottom:12px;left:0;right:0;text-align:center;font-size:11.5px;color:var(--ink2);pointer-events:none;z-index:4}
+/* инспектор */
+.insp{position:fixed;right:12px;top:110px;width:220px;z-index:9;background:var(--panel);backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;display:none;max-height:calc(100% - 130px);overflow-y:auto}
+.insp .g{height:3px;background:linear-gradient(90deg,transparent,var(--gold),#EAD08A,var(--gold),transparent)}
+.insp .nm{width:calc(100% - 24px);margin:11px 12px 2px;border:1px solid var(--line-soft);border-radius:9px;padding:7px 9px;font-family:var(--serif);font-size:19px;font-weight:600;color:var(--rose-deep);background:#fff}
+.insp small.s2{display:block;padding:0 14px 6px;font-size:11px;color:var(--ink2);font-weight:600}
+.insp .sect{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2);font-weight:800;padding:5px 14px 2px}
+.insp .rotrow{display:flex;gap:7px;padding:4px 12px 6px}
+.insp .rotrow button{flex:1;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:9px;padding:7px;font-size:14px;cursor:pointer}
+.insp .rotrow button:hover{border-color:var(--rose);color:var(--rose)}
+.insp .row{display:flex;align-items:center;gap:7px;padding:4px 14px;font-size:12.5px}
+.insp .row span{flex:1}
+.insp .row button{width:24px;height:24px;border-radius:7px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;font-size:14px}
+.insp .row button:hover{border-color:var(--rose);color:var(--rose)}
+.insp .row b{min-width:14px;text-align:center;font-variant-numeric:tabular-nums}
+.insp .align{display:none;align-items:center;justify-content:center;gap:8px;width:calc(100% - 24px);margin:6px 12px 0;border:1px dashed var(--gold-line);background:var(--gold-soft);color:var(--gold);border-radius:10px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.insp .align svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2}
+.insp .acts{display:flex;gap:8px;padding:8px 12px 12px}
+.insp .acts button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid var(--line);background:#fff;color:var(--ink)}
+.insp .acts button:hover{border-color:var(--rose);color:var(--rose-deep)}
+.insp .acts .del{border-color:#F0C7D3;background:#FBE7EE;color:#b6355a}
+.insp .acts svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2}
+</style>
+</head>
+<body>
+<div id="top">
+  <div class="brand">План<small>вид сверху</small></div>
+  <a class="nav" href="constructor.html">Конструктор</a>
+  <a class="nav" href="hall.html">3D-зал</a>
+  <span class="sp"></span>
+  <a class="to3d" href="hall.html"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5ZM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>Смотреть в 3D</a>
+</div>
+<div id="bar">
+  <select id="addsel">
+    <option value="">＋ Добавить стол…</option>
+    <optgroup label="Круглый"><option value="round-150-8">Круглый ⌀150 · 8</option><option value="round-180-10">Круглый ⌀180 · 10</option><option value="round-200-12">Круглый ⌀200 · 12</option></optgroup>
+    <optgroup label="Банкетный"><option value="rect-240-90">Банкетный 240×90</option><option value="rect-300-90">Банкетный 300×90</option><option value="rect-180-90">Банкетный 180×90</option></optgroup>
+  </select>
+  <select id="objsel">
+    <option value="">＋ Объект зала…</option>
+    <option value="floor">Танцпол</option><option value="stage">Сцена / президиум</option><option value="bar">Бар</option><option value="arch">Арка</option>
+  </select>
+  <select id="preset">
+    <option value="">Готовые схемы…</option>
+    <option value="u">Буква П</option><option value="head">Президиум + круглые</option><option value="grid">Круглые сеткой</option><option value="rows">Банкет рядами</option>
+  </select>
+  <button id="distbtn" class="on"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12h18M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg>Зазоры между стульями</button>
+  <button id="fitbtn"><svg class="ic" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Показать всё</button>
+  <button id="lockbtn"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Зафиксировать</button>
+</div>
+<div class="badge" id="stat">—</div>
+<svg class="floor" id="floor"></svg>
+<div class="insp" id="insp">
+  <div class="g"></div>
+  <input class="nm" id="i-name" maxlength="26">
+  <small class="s2" id="i-sub"></small>
+  <div id="i-tablectl">
+    <div class="sect">Поворот</div>
+    <div class="rotrow"><button data-rot="-1">⟲ −45°</button><button data-rot="1">+45° ⟳</button></div>
+    <div class="sect">Стулья (клик по ＋ на плане — добавить)</div>
+    <div id="i-rows"></div>
+    <button class="align" id="i-align"><svg viewBox="0 0 24 24"><path d="M8 7h8M8 12h8M8 17h8"/></svg>Выровнять · равные отступы</button>
+  </div>
+  <div class="acts"><button id="i-dup"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Копия</button><button class="del" id="i-del"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Удалить</button></div>
+</div>
+<div class="hint" id="hint">Клик — выбрать · тяни — двигать (можно вплотную) · клик по ＋ — стул · клик по стулу — убрать</div>
+
+<script>
+const SVG='http://www.w3.org/2000/svg', floor=document.getElementById('floor');
+const HALL_KEY='flowerHall', ROOM_KEY='flowerRoom';
+const readJSON=k=>{try{return JSON.parse(localStorage.getItem(k));}catch(_){return null;}};
+let tables=[], objs=[], locked=false, showDist=true, selected=null, selObj=null, guides=[], VB={x:-650,z:-450,w:1300,h:900};
+
+// ---- загрузка/сохранение (совместимо с 3D-залом) ----
+function load(){
+  const h=readJSON(HALL_KEY);
+  let list = h && Array.isArray(h.tables) ? h.tables : (Array.isArray(h)?[{shape:'round',x:0,z:0,seats:6,bouquets:h}]:[]);
+  locked = !!(h && h.locked);
+  tables = list.map(d=>{
+    const t=Object.assign({}, d);
+    t.shape = d.shape==='rect'?'rect':'round';
+    t.x=+d.x||0; t.z=+d.z||0; t.rot=+d.rot||0; t.name=d.name||'';
+    if(t.shape==='rect'){ t.hl=d.hl||120; t.hw=d.hw||45;
+      let a=d.seatsA,b=d.seatsB; if(a==null||b==null){const s=d.seats||8;a=Math.ceil(s/2);b=s-a;}
+      t.seatsA=a; t.seatsB=b; t.seatsE1=d.seatsE1||0; t.seatsE2=d.seatsE2||0;
+      t.gaps=(d.gaps&&typeof d.gaps==='object'&&!Array.isArray(d.gaps))?d.gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]};
+      ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ if(!Array.isArray(t.gaps[k])) t.gaps[k]=[]; });
+    } else { t.R=d.R||75; t.seats=d.seats||6; }
+    t.bouquets=d.bouquets||[]; t.settings=d.settings||[];
+    return t;
+  });
+  objs = (readJSON(ROOM_KEY)||[]).map(o=>Object.assign({},o));
+}
+function toData(t){ const d=Object.assign({},t);
+  d.seats = t.shape==='rect' ? rectTotal(t) : t.seats;
+  return d; }
+function save(){
+  try{ localStorage.setItem(HALL_KEY, JSON.stringify({tables:tables.map(toData), locked})); }catch(_){}
+  try{ localStorage.setItem(ROOM_KEY, JSON.stringify(objs)); }catch(_){}
+}
+// ---- геометрия (см) — как в 3D ----
+const CH=22; // вынос стула за кромку
+const rectTotal=t=>['seatsA','seatsB','seatsE1','seatsE2'].reduce((s,k)=>s+Math.max(0,(t[k]||0)-(t.gaps[k]||[]).length),0);
+const seatCount=t=> t.shape==='rect'?rectTotal(t):t.seats;
+function localToWorld(t,lx,lz){ const c=Math.cos(t.rot),s=Math.sin(t.rot); return [t.x+c*lx+s*lz, t.z-s*lx+c*lz]; }
+function chairSlots(t){ const out=[];
+  if(t.shape==='round'){ const n=t.seats; for(let i=0;i<n;i++){ const a=i/Math.max(n,1)*Math.PI*2-Math.PI/2; out.push({x:t.x+Math.cos(a)*(t.R+CH),z:t.z+Math.sin(a)*(t.R+CH),gapped:false,side:'seats',slot:i,rot:t.rot+a+Math.PI/2}); } return out; }
+  const long=(k,sg)=>{ const n=t[k]||0; for(let i=0;i<n;i++){ const gp=(t.gaps[k]||[]).indexOf(i)>=0; const [x,z]=localToWorld(t,-t.hl+(i+0.5)/n*(2*t.hl), sg*(t.hw+CH)); out.push({x,z,gapped:gp,side:k,slot:i,rot:t.rot+(sg>0?Math.PI/2:-Math.PI/2)}); } };
+  const end=(k,sg)=>{ const n=t[k]||0; for(let i=0;i<n;i++){ const gp=(t.gaps[k]||[]).indexOf(i)>=0; const [x,z]=localToWorld(t,sg*(t.hl+CH), -t.hw+(i+0.5)/n*(2*t.hw)); out.push({x,z,gapped:gp,side:k,slot:i,rot:t.rot}); } };
+  long('seatsA',1); long('seatsB',-1); end('seatsE1',1); end('seatsE2',-1); return out; }
+function halfExt(t){ if(t.shape==='round') return {hx:t.R,hy:t.R}; const c=Math.abs(Math.cos(t.rot)),s=Math.abs(Math.sin(t.rot)); return {hx:t.hl*c+t.hw*s, hy:t.hl*s+t.hw*c}; }
+const tname=t=> t.name || ('Стол №'+(tables.indexOf(t)+1));
+const tsize=t=> t.shape==='round'? ('⌀ '+(t.R*2)+' см') : (t.hl*2+'×'+t.hw*2+' см');
+
+// ---- рендер ----
+const OBJ={floor:{w:400,h:300,label:'Танцпол',fill:'#F3E7DF',stroke:'#DFC7B4'},stage:{w:360,h:120,label:'Сцена',fill:'#EAD9E6',stroke:'#D3B7CC'},bar:{w:220,h:80,label:'Бар',fill:'#DCE6DE',stroke:'#B7CDBE'},arch:{w:160,h:40,label:'Арка',fill:'#F6E7C6',stroke:'#E4C98A'}};
+function el(tag,a){ const e=document.createElementNS(SVG,tag); for(const k in a) e.setAttribute(k,a[k]); return e; }
+function setVB(){ floor.setAttribute('viewBox',`${VB.x} ${VB.z} ${VB.w} ${VB.h}`); }
+function render(){
+  setVB(); floor.innerHTML='';
+  guides.forEach(g=>{ floor.appendChild(g.axis==='x'?el('line',{x1:g.pos,y1:VB.z,x2:g.pos,y2:VB.z+VB.h,stroke:'#DB2777','stroke-width':2,'stroke-dasharray':'6 8',opacity:.8}):el('line',{x1:VB.x,y1:g.pos,x2:VB.x+VB.w,y2:g.pos,stroke:'#DB2777','stroke-width':2,'stroke-dasharray':'6 8',opacity:.8})); });
+  // объекты зала (под столами)
+  objs.forEach(o=>{ const g=el('g',{transform:`translate(${o.x},${o.z}) rotate(${(o.rot||0)*180/Math.PI})`}); g.dataset.obj=o.id; g.style.cursor=locked?'default':'move';
+    const on=selObj===o.id;
+    g.appendChild(el('rect',{x:-o.w/2,y:-o.h/2,width:o.w,height:o.h,rx:14,fill:o.fill,stroke:on?'#DB2777':o.stroke,'stroke-width':on?5:3,'stroke-dasharray':o.kind==='arch'?'10 8':'none'}));
+    const tx=el('text',{x:0,y:11,'text-anchor':'middle','font-size':30,'font-weight':700,fill:'#7a6a55','pointer-events':'none'}); tx.textContent=o.label; g.appendChild(tx);
+    floor.appendChild(g); });
+  // столы
+  tables.forEach(t=>{ const sel=selected===t; const g=el('g',{}); g.dataset.id=tables.indexOf(t); g.style.cursor=locked?'default':'move';
+    const body=el('g',{transform:`translate(${t.x},${t.z}) rotate(${t.rot*180/Math.PI})`});
+    if(t.shape==='round'){ if(sel) body.appendChild(el('circle',{r:t.R+12,fill:'none',stroke:'#DB2777','stroke-width':5})); body.appendChild(el('circle',{r:t.R,fill:'#fff',stroke:'#E7C4D5','stroke-width':4})); }
+    else { if(sel) body.appendChild(el('rect',{x:-t.hl-12,y:-t.hw-12,width:t.hl*2+24,height:t.hw*2+24,rx:18,fill:'none',stroke:'#DB2777','stroke-width':5})); body.appendChild(el('rect',{x:-t.hl,y:-t.hw,width:t.hl*2,height:t.hw*2,rx:14,fill:'#fff',stroke:'#E7C4D5','stroke-width':4})); }
+    g.appendChild(body);
+    if(t.bouquets&&t.bouquets.length) g.appendChild(el('circle',{cx:t.x,cy:t.z,r:14,fill:'#F4C6D9'}));
+    chairSlots(t).forEach(c=>{ if(c.gapped && !sel) return; const cg=el('g',{transform:`translate(${c.x},${c.z}) rotate(${(c.rot||0)*180/Math.PI})`}); cg.style.cursor='pointer'; cg.dataset.id=tables.indexOf(t); cg.dataset.side=c.side; cg.dataset.slot=c.slot; cg.dataset.chair='1';
+      if(c.gapped){ cg.appendChild(el('rect',{x:-20,y:-20,width:40,height:40,rx:8,fill:'#fff',stroke:'#DB2777','stroke-width':4,'stroke-dasharray':'8 6'})); cg.appendChild(el('path',{d:'M0 -11V11 M-11 0H11',stroke:'#DB2777','stroke-width':5,'stroke-linecap':'round'})); }
+      else { cg.appendChild(el('rect',{x:-20,y:-22,width:40,height:32,rx:6,fill:'#F7E1EC',stroke:'#E3AEC9','stroke-width':3})); cg.appendChild(el('rect',{x:-20,y:6,width:40,height:12,rx:4,fill:'#EBC7DA'})); }
+      g.appendChild(cg); });
+    floor.appendChild(g); });
+  // подписи столов — верхний слой
+  tables.forEach(t=>{ const txt=(dy,s,o)=>{ const e=el('text',Object.assign({x:t.x,y:t.z+dy,'text-anchor':'middle','pointer-events':'none',stroke:'#fff','stroke-width':7,'paint-order':'stroke'},o)); e.textContent=s; floor.appendChild(e); };
+    txt(-18, tname(t), {'font-family':'Cormorant Garamond, Georgia, serif','font-size':28,fill:'#B47C97','font-weight':600});
+    txt(8, tsize(t), {'font-size':26,fill:'#9D174D','font-weight':800});
+    txt(34, seatCount(t)+' мест', {'font-size':23,fill:'#B06E92','font-weight':600}); });
+  // объединённые столы — сумма гостей
+  clusters().forEach(cl=>{ if(cl.length<2) return; const total=cl.reduce((s,t)=>s+seatCount(t),0); let minZ=1e9,minX=1e9,maxX=-1e9; cl.forEach(t=>{const e=halfExt(t); minZ=Math.min(minZ,t.z-e.hy); minX=Math.min(minX,t.x);maxX=Math.max(maxX,t.x);});
+    const g=el('g',{transform:`translate(${(minX+maxX)/2},${minZ-56})`}); const w=270;
+    g.appendChild(el('rect',{x:-w/2,y:-24,width:w,height:48,rx:24,fill:'#FBF3DD',stroke:'#E4C98A','stroke-width':3}));
+    const tx=el('text',{x:0,y:9,'text-anchor':'middle','font-size':28,'font-weight':800,fill:'#A16207'}); tx.textContent='Вместе: '+total+' гостей'; g.appendChild(tx); floor.appendChild(g); });
+  // зазоры между стульями (красный если тесно) — самый верх
+  if(showDist){ const occ=t=>chairSlots(t).filter(c=>!c.gapped);
+    for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){ const A=tables[i],B=tables[j]; if(Math.hypot(A.x-B.x,A.z-B.z)>700) continue; const ca=occ(A),cb=occ(B); if(!ca.length||!cb.length) continue;
+      let best=1e9,ax,az,bx,bz; ca.forEach(p=>cb.forEach(q=>{const d=Math.hypot(p.x-q.x,p.z-q.z); if(d<best){best=d;ax=p.x;az=p.z;bx=q.x;bz=q.z;}}));
+      if(best>230) continue; const cm=Math.max(0,Math.round(best-45)), warn=cm<50, mx=(ax+bx)/2,mz=(az+bz)/2;
+      floor.appendChild(el('line',{x1:ax,y1:az,x2:bx,y2:bz,stroke:warn?'#d64562':'#C99BB5','stroke-width':warn?5:3}));
+      const g=el('g',{transform:`translate(${mx},${mz})`}); g.appendChild(el('rect',{x:-52,y:-21,width:104,height:42,rx:21,fill:warn?'#FBE0E8':'#fff',stroke:warn?'#d64562':'#E4B7CB','stroke-width':3}));
+      const tt=el('text',{x:0,y:9,'text-anchor':'middle','font-size':25,'font-weight':800,fill:warn?'#c0304f':'#7E5670','pointer-events':'none'}); tt.textContent=cm+' см'; g.appendChild(tt); floor.appendChild(g); } }
+  document.getElementById('stat').textContent=`${tables.length} стол · ${tables.reduce((s,t)=>s+seatCount(t),0)} гостей`;
+  renderInsp();
+}
+function clusters(){ const p=tables.map((_,i)=>i); const find=i=>p[i]===i?i:(p[i]=find(p[i]));
+  for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){ const a=tables[i],b=tables[j],ea=halfExt(a),eb=halfExt(b); const ox=ea.hx+eb.hx-Math.abs(a.x-b.x),oy=ea.hy+eb.hy-Math.abs(a.z-b.z); if(ox>-12&&oy>-12) p[find(i)]=find(j); }
+  const m={}; tables.forEach((t,i)=>{const r=find(i);(m[r]=m[r]||[]).push(t);}); return Object.values(m); }
+// ---- коллизия + привязка ----
+function resolve(t){ for(let k=0;k<6;k++){ let moved=false; tables.forEach(o=>{ if(o===t)return; const et=halfExt(t),eo=halfExt(o),dx=t.x-o.x,dz=t.z-o.z; const ox=et.hx+eo.hx-Math.abs(dx),oz=et.hy+eo.hy-Math.abs(dz); if(ox>0&&oz>0){ if(Math.abs(dx)>=Math.abs(dz)) t.x+=(dx>=0?ox:-ox); else t.z+=(dz>=0?oz:-oz); moved=true; } }); if(!moved)break; } }
+function snap(t){ guides=[]; const TH=12; tables.forEach(o=>{ if(o===t)return; const et=halfExt(t),eo=halfExt(o); if(Math.abs(t.z-o.z)>et.hy+eo.hy-8 && Math.abs(t.x-o.x)<TH){t.x=o.x;guides.push({axis:'x',pos:o.x});} if(Math.abs(t.x-o.x)>et.hx+eo.hx-8 && Math.abs(t.z-o.z)<TH){t.z=o.z;guides.push({axis:'y',pos:o.z});} }); }
+// ---- события ----
+function svgPt(e){ const r=floor.getBoundingClientRect(); return {x:VB.x+(e.clientX-r.left)/r.width*VB.w, z:VB.z+(e.clientY-r.top)/r.height*VB.h}; }
+let drag=null;
+floor.addEventListener('pointerdown',e=>{ if(locked) return;
+  const chair=e.target.closest('[data-chair]');
+  if(chair){ const t=tables[+chair.dataset.id], key=chair.dataset.side, slot=+chair.dataset.slot;
+    if(key==='seats'){ t.seats=Math.max(0,t.seats-1); } else { const arr=t.gaps[key]; const j=arr.indexOf(slot); j>=0?arr.splice(j,1):arr.push(slot); }
+    render(); save(); return; }
+  const og=e.target.closest('g[data-obj]'); if(og){ const o=objs.find(x=>x.id==og.dataset.obj); selObj=o.id; selected=null; const p=svgPt(e); drag={o,dx:o.x-p.x,dz:o.z-p.z}; floor.setPointerCapture(e.pointerId); render(); return; }
+  const g=e.target.closest('g[data-id]'); if(!g){ if(selected||selObj){selected=null;selObj=null;render();} return; }
+  const t=tables[+g.dataset.id]; selected=t; selObj=null; const p=svgPt(e); drag={t,dx:t.x-p.x,dz:t.z-p.z}; floor.setPointerCapture(e.pointerId); render();
+});
+floor.addEventListener('pointermove',e=>{ if(!drag) return; const p=svgPt(e);
+  if(drag.o){ drag.o.x=p.x+drag.dx; drag.o.z=p.z+drag.dz; } else { drag.t.x=p.x+drag.dx; drag.t.z=p.z+drag.dz; resolve(drag.t); snap(drag.t); } render(); });
+floor.addEventListener('pointerup',()=>{ if(drag){ drag=null; guides=[]; render(); save(); } });
+// зум колесом
+floor.addEventListener('wheel',e=>{ e.preventDefault(); const p=svgPt(e), f=e.deltaY>0?1.12:0.9; const nw=Math.max(500,Math.min(4000,VB.w*f)), nh=nw*VB.h/VB.w; VB.x=p.x-(p.x-VB.x)*nw/VB.w; VB.z=p.z-(p.z-VB.z)*nh/VB.h; VB.w=nw; VB.h=nh; render(); },{passive:false});
+
+// ---- инспектор ----
+const capVal=(t,k)=>Math.max(0,(t[k]||0)-(t.gaps[k]||[]).length);
+const hasGaps=t=> t.shape==='rect' && ['seatsA','seatsB','seatsE1','seatsE2'].some(k=>(t.gaps[k]||[]).length);
+function renderInsp(){ const box=document.getElementById('insp'), t=selected;
+  if(!t||locked){ box.style.display='none'; return; } box.style.display='block';
+  document.getElementById('i-name').value=tname(t);
+  document.getElementById('i-sub').textContent=tsize(t)+' · '+seatCount(t)+' мест';
+  const row=(l,k,v)=>`<div class="row"><span>${l}</span><button data-cap="${k}" data-d="-1">−</button><b>${v}</b><button data-cap="${k}" data-d="1">+</button></div>`;
+  document.getElementById('i-rows').innerHTML = t.shape==='round'
+    ? row('Гостей','seats',t.seats)
+    : row('Сторона 1','seatsA',capVal(t,'seatsA'))+row('Сторона 2','seatsB',capVal(t,'seatsB'))+row('Торец 1','seatsE1',capVal(t,'seatsE1'))+row('Торец 2','seatsE2',capVal(t,'seatsE2'));
+  document.getElementById('i-align').style.display=hasGaps(t)?'flex':'none';
+}
+document.getElementById('i-rows').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b||!selected)return; const t=selected,k=b.dataset.cap,d=+b.dataset.d;
+  if(k==='seats'){ t.seats=Math.max(2,Math.min(16,t.seats+d)); }
+  else if(d>0){ if(t.gaps[k].length){t.gaps[k].sort((a,b)=>a-b);t.gaps[k].pop();} else t[k]=Math.min(k.startsWith('seatsE')?2:12,(t[k]||0)+1); }
+  else { const cap=t[k]||0; for(let i=cap-1;i>=0;i--){ if(t.gaps[k].indexOf(i)<0){t.gaps[k].push(i);break;} } }
+  render(); save(); });
+document.querySelectorAll('.rotrow button').forEach(b=>b.addEventListener('click',()=>{ if(!selected)return; selected.rot+=(+b.dataset.rot)*Math.PI/4; resolve(selected); render(); save(); }));
+document.getElementById('i-name').addEventListener('change',e=>{ if(selected){ selected.name=e.target.value.trim(); render(); save(); } });
+document.getElementById('i-align').addEventListener('click',()=>{ const t=selected; if(!t)return; ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ t[k]-=t.gaps[k].length; t.gaps[k]=[]; }); render(); save(); });
+document.getElementById('i-del').addEventListener('click',()=>{ tables=tables.filter(x=>x!==selected); selected=null; render(); save(); });
+document.getElementById('i-dup').addEventListener('click',()=>{ if(!selected)return; const c=JSON.parse(JSON.stringify(selected)); c.x+=90;c.z+=90;c.name='';c.bouquets=[]; resolve(c); tables.push(c); selected=c; render(); save(); });
+// ---- тулбар ----
+document.getElementById('addsel').addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(!v)return; const p=v.split('-'); const cx=VB.x+VB.w/2+(Math.random()*200-100), cz=VB.z+VB.h/2+(Math.random()*200-100);
+  let t; if(p[0]==='round') t={shape:'round',x:cx,z:cz,rot:0,R:+p[1]/2,seats:+p[2],bouquets:[],settings:[]};
+  else { const L=+p[1],W=+p[2],n=Math.max(2,Math.round(L/48)); t={shape:'rect',x:cx,z:cz,rot:0,hl:L/2,hw:W/2,seatsA:n,seatsB:n,seatsE1:0,seatsE2:0,gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]},bouquets:[],settings:[]}; }
+  resolve(t); tables.push(t); selected=t; render(); save(); });
+document.getElementById('objsel').addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(!v)return; const d=OBJ[v]; objs.push({id:'o'+Date.now(),kind:v,x:VB.x+VB.w/2,z:VB.z+VB.h*0.72,rot:0,w:d.w,h:d.h,label:d.label,fill:d.fill,stroke:d.stroke}); render(); save(); });
+document.getElementById('preset').addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(!v)return; applyPreset(v); });
+document.getElementById('distbtn').addEventListener('click',function(){ showDist=!showDist; this.classList.toggle('on',showDist); render(); });
+document.getElementById('lockbtn').addEventListener('click',function(){ locked=!locked; this.classList.toggle('on',locked); if(locked){selected=null;selObj=null;} render(); save(); });
+document.getElementById('fitbtn').addEventListener('click',fitView);
+addEventListener('keydown',e=>{ if(e.key==='Delete'&&selObj){ objs=objs.filter(o=>o.id!==selObj); selObj=null; render(); save(); } });
+
+const R90=Math.PI/2;
+function applyPreset(v){
+  const R=(x,z,rot,cap,name)=>({shape:'rect',x,z,rot,hl:120,hw:45,seatsA:cap.A,seatsB:cap.B,seatsE1:cap.E1||0,seatsE2:cap.E2||0,gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]},name:name||'',bouquets:[],settings:[]});
+  const O=(x,z,seats)=>({shape:'round',x,z,rot:0,R:75,seats,bouquets:[],settings:[]});
+  if(v==='u') tables=[R(0,-150,0,{A:6,B:0},'Молодожёны'),R(-95,30,R90,{A:0,B:5}),R(95,30,R90,{A:5,B:0})];
+  else if(v==='head'){ tables=[R(0,-250,0,{A:6,B:0},'Президиум')]; for(let c=0;c<3;c++)for(let r=0;r<2;r++) tables.push(O((c-1)*330,60+r*330,8)); }
+  else if(v==='grid'){ tables=[]; for(let r=0;r<3;r++)for(let c=0;c<3;c++) tables.push(O((c-1)*330,(r-1)*330,8)); }
+  else if(v==='rows'){ tables=[]; for(let i=0;i<3;i++) tables.push(R((i-1)*270,0,R90,{A:5,B:5})); }
+  selected=null; render(); save(); fitView();
+}
+function fitView(){ if(!tables.length && !objs.length){ VB={x:-650,z:-450,w:1300,h:900}; render(); return; }
+  let minX=1e9,maxX=-1e9,minZ=1e9,maxZ=-1e9;
+  tables.forEach(t=>{ const e=halfExt(t), r=Math.max(e.hx,e.hy)+CH+45; minX=Math.min(minX,t.x-r);maxX=Math.max(maxX,t.x+r);minZ=Math.min(minZ,t.z-r);maxZ=Math.max(maxZ,t.z+r); });
+  objs.forEach(o=>{ minX=Math.min(minX,o.x-o.w/2);maxX=Math.max(maxX,o.x+o.w/2);minZ=Math.min(minZ,o.z-o.h/2);maxZ=Math.max(maxZ,o.z+o.h/2); });
+  const pad=120, w=Math.max(700,maxX-minX+pad*2), h=Math.max(500,maxZ-minZ+pad*2), cx=(minX+maxX)/2, cz=(minZ+maxZ)/2;
+  const rect=floor.getBoundingClientRect(), ar=rect.width/rect.height; let W=w,H=h; if(W/H>ar) H=W/ar; else W=H*ar;
+  VB={x:cx-W/2,z:cz-H/2,w:W,h:H}; render();
+}
+load(); fitView();
+</script>
+</body>
+</html>
