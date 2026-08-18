@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="assets/css/hall.css?v=3">
+<link rel="stylesheet" href="assets/css/hall.css?v=4">
 </head>
 <body>
 <div id="stage"></div>
@@ -893,15 +893,15 @@
 
   // === Схема стола (вид сверху): показывает стулья по сторонам и подсвечивает нужную ===
   const SIDE_NAMES = { seatsA:'Сторона 1', seatsB:'Сторона 2', seatsE1:'Торец 1', seatsE2:'Торец 2', seats:'Гости вокруг' };
-  function dgChairs(n, x0,y0,W,H, side, hl, gaps){
+  function dgChairs(n, x0,y0,W,H, side, hl, gaps, key){
     let s=''; gaps=gaps||[];
     for(let i=0;i<n;i++){ let x,y,w,h; const gapped=gaps.indexOf(i)>=0;
       if(side==='bottom'){ w=13;h=8; x=x0+(i+0.5)/n*W-w/2; y=y0+H+5; }
       else if(side==='top'){ w=13;h=8; x=x0+(i+0.5)/n*W-w/2; y=y0-5-h; }
       else if(side==='right'){ w=8;h=13; x=x0+W+5; y=y0+(i+0.5)/n*H-h/2; }
       else { w=8;h=13; x=x0-5-w; y=y0+(i+0.5)/n*H-h/2; }
-      const cls = gapped ? 'dg-chair dg-gap' : ('dg-chair'+(hl?' hl':''));
-      s+=`<rect class="${cls}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w}" height="${h}" rx="2.5"/>`; }
+      const cls = gapped ? 'dg-chair dg-gap dg-click' : ('dg-chair dg-click'+(hl?' hl':''));
+      s+=`<rect class="${cls}" data-side="${key}" data-slot="${i}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w}" height="${h}" rx="2.5"/>`; }
     return s;
   }
   function renderDiagram(el, ud, hl){
@@ -910,7 +910,7 @@
     if(ud.shape!=='rect'){
       const n=Math.max(ud.seats||0,0), cx=90,cy=54,R=32; let ch='';
       for(let i=0;i<n;i++){ const a=i/Math.max(n,1)*Math.PI*2-Math.PI/2, x=cx+Math.cos(a)*(R+12), y=cy+Math.sin(a)*(R+12);
-        ch+=`<circle class="dg-chair${hl==='seats'?' hl':''}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5"/>`; }
+        ch+=`<circle class="dg-chair dg-click${hl==='seats'?' hl':''}" data-side="seats" data-slot="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5"/>`; }
       const ring = hl==='seats' ? `<circle class="dg-edge" cx="${cx}" cy="${cy}" r="${R}" fill="none"/>` : '';
       el.innerHTML=`<svg viewBox="0 0 180 108"><circle class="dg-table" cx="${cx}" cy="${cy}" r="${R}"/>${ring}${ch}</svg>`+cap; return;
     }
@@ -923,8 +923,8 @@
       : hl==='seatsE2' ? `<line class="dg-edge" x1="${x0-o}" y1="${y0}" x2="${x0-o}" y2="${y0+H}"/>` : '';
     const G=ud.gaps||{};
     el.innerHTML=`<svg viewBox="0 0 180 108"><rect class="dg-table" x="${x0}" y="${y0}" width="${W}" height="${H}" rx="5"/>${edge}`
-      + dgChairs(a,x0,y0,W,H,'bottom',hl==='seatsA',G.seatsA) + dgChairs(b,x0,y0,W,H,'top',hl==='seatsB',G.seatsB)
-      + dgChairs(e1,x0,y0,W,H,'right',hl==='seatsE1',G.seatsE1) + dgChairs(e2,x0,y0,W,H,'left',hl==='seatsE2',G.seatsE2)
+      + dgChairs(a,x0,y0,W,H,'bottom',hl==='seatsA',G.seatsA,'seatsA') + dgChairs(b,x0,y0,W,H,'top',hl==='seatsB',G.seatsB,'seatsB')
+      + dgChairs(e1,x0,y0,W,H,'right',hl==='seatsE1',G.seatsE1,'seatsE1') + dgChairs(e2,x0,y0,W,H,'left',hl==='seatsE2',G.seatsE2,'seatsE2')
       + `</svg>`+cap;
   }
 
@@ -954,6 +954,15 @@
     if(act==='compact'){ compactSeats(t); }
     else if(seatKey){ const d=+btn.dataset.d; if(d>0) addChairSide(t, seatKey); else removeChairSide(t, seatKey); }
     else { closeMenu(); return; }
+    renderSeatCtl(t); afterChange(false);
+  });
+  // клик прямо по схеме: по стулу — убрать, по пустому квадрату — поставить
+  document.getElementById('p-diagram').addEventListener('click', (e)=>{
+    const r=e.target.closest('[data-side]'); const t=selected; if(!r||!t) return;
+    const key=r.dataset.side, slot=+r.dataset.slot;
+    pushHistory();
+    if(key==='seats'){ t.userData.seats=Math.max(0,t.userData.seats-1); buildSettings(t); }   // круглый: клик по гостю — убрать
+    else { const g=t.userData.gaps&&t.userData.gaps[key]; const gapped=g&&g.indexOf(slot)>=0; if(gapped) fillSlot(t,key,slot); else gapChair(t,key,slot); }
     renderSeatCtl(t); afterChange(false);
   });
   document.getElementById('p-acts').addEventListener('click', (e)=>{
@@ -1447,7 +1456,7 @@
 
   window.hallDebug = { scene, camera, cam, tables, get selected(){return selected;}, createTable, addBouquet, computeWarnings, drag, TABLE_R, TABLE_H, pickables,
     enterWalk, exitWalk, sitAt, updateWalk, walk, keys, get mode(){return mode;},
-    dropBouquetToNearestTable, openBouquetMenu, openSeating, updateGuestNames, openChairMenu, setRectSides, setRectSeats, chairSpacing, tableGap, tableExtent, renderSeatCtl,
+    dropBouquetToNearestTable, openBouquetMenu, openSeating, updateGuestNames, openChairMenu, setRectSides, setRectSeats, chairSpacing, tableGap, tableExtent, renderSeatCtl, selectTable,
     openNewTable, confirmNewTable, nt, get locked(){return locked;}, setLocked };
 })();
 </script>

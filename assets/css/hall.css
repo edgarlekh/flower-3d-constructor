@@ -349,7 +349,10 @@ body.locked #stage{cursor:default}
 .dg-chair{fill:#fff;stroke:var(--ui-line);stroke-width:1;transition:fill .12s,stroke .12s}
 .dg-chair.hl{fill:var(--accent);stroke:var(--accent-deep)}
 .dg-edge{stroke:var(--accent);stroke-width:3.5;stroke-linecap:round;fill:none}
-.dg-gap{fill:transparent;stroke:var(--ui-line);stroke-dasharray:2.5 2.5;opacity:.8}
+.dg-gap{fill:#fff;stroke:var(--accent);stroke-dasharray:2.5 2.5;opacity:.9}
+.dg-click{cursor:pointer;transition:fill .1s,stroke .1s}
+.dg-click:hover{fill:var(--accent);stroke:var(--accent-deep)}
+.dg-gap.dg-click:hover{fill:var(--accent-soft)}
 .seat-compact{display:flex;align-items:center;gap:8px;width:100%;border:1px dashed var(--gold-line);background:var(--gold-soft);color:var(--gold);border-radius:9px;padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer;margin-top:5px;font-family:inherit}
 .seat-compact:hover{filter:brightness(.97)}
 .seat-compact .ic{width:15px;height:15px;stroke:var(--gold)}
