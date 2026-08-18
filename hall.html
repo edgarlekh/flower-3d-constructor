@@ -94,12 +94,17 @@
   </div>
 </div>
 
-<div id="hint" class="label">Тяните букет/тарелку · скатерть — весь стол · клик по стулу — убрать/вернуть · правый клик — меню · двойной клик — подлететь</div>
+<div id="hint" class="label">Тяните букет/тарелку · скатерть — весь стол · правый клик по столу — стулья по сторонам, рассадка, поворот · двойной клик — подлететь</div>
 <div id="fade"></div>
 <div id="objmenu">
   <button data-act="dup">⧉ Дублировать</button>
   <button data-act="edit">✎ Изменить в конструкторе</button>
   <button data-act="del" class="del">🗑 Удалить</button>
+</div>
+<div id="chairmenu">
+  <div class="tm-title">Стул</div>
+  <button data-act="chair-add">＋ Ещё стул на эту сторону</button>
+  <button data-act="chair-del" class="del">🗑 Убрать этот стул</button>
 </div>
 <div id="tablemenu">
   <div class="tm-title" id="tm-title">Стол</div>
@@ -670,12 +675,15 @@
     cnd.x=((e.clientX-r.left)/r.width)*2-1; cnd.y=-((e.clientY-r.top)/r.height)*2+1;
     crc.setFromCamera(cnd, camera);
     const hits=crc.intersectObjects(pickables(), true);
-    // предпочитаем букет; иначе — стол (для его меню)
-    let bq=null, tbl=null;
+    // приоритет: букет → стул → стол
+    let bq=null, chair=null, tbl=null;
     for(const h of hits){ let o=h.object; while(o && !(o.userData&&o.userData.table)) o=o.parent;
-      if(o && o.userData.kind==='bouquet'){ bq=o; break; }
-      if(o && !tbl) tbl=o.userData.table; }
+      if(!o) continue;
+      if(o.userData.kind==='bouquet'){ bq=o; break; }
+      if(o.userData.kind==='chair'){ chair=o; break; }
+      if(!tbl) tbl=o.userData.table; }
     if(bq){ selectTable(bq.userData.table); openBouquetMenu(bq, e); }
+    else if(chair){ selectTable(chair.userData.table); openChairMenu(chair, e); }
     else if(tbl){ openTableMenu(tbl, e); }
     else closeMenu();
   });
@@ -689,7 +697,30 @@
     m.style.left=Math.min(x, innerWidth-210)+'px'; m.style.top=Math.min(y, innerHeight-150)+'px';
     m.classList.add('show');
   }
-  function closeMenu(){ document.getElementById('objmenu').classList.remove('show'); document.getElementById('tablemenu').classList.remove('show'); menuTarget=null; menuTable=null; }
+  function closeMenu(){ document.getElementById('objmenu').classList.remove('show'); document.getElementById('tablemenu').classList.remove('show'); document.getElementById('chairmenu').classList.remove('show'); menuTarget=null; menuTable=null; menuChair=null; }
+
+  // Меню по правому клику на стул: убрать этот / добавить ещё на эту сторону.
+  let menuChair=null;
+  function chairSide(ch){ const t=ch.userData.table; return isRect(t) ? (ch.userData.seatIdx < t.userData.seatsA ? 'A' : 'B') : null; }
+  function openChairMenu(ch, e){
+    menuChair=ch; const m=document.getElementById('chairmenu');
+    const x=(e&&e.clientX)||200, y=(e&&e.clientY)||200;
+    m.style.left=Math.min(x, innerWidth-230)+'px'; m.style.top=Math.min(y, innerHeight-140)+'px';
+    document.getElementById('objmenu').classList.remove('show'); document.getElementById('tablemenu').classList.remove('show');
+    m.classList.add('show');
+  }
+  document.getElementById('chairmenu').addEventListener('click', (e)=>{
+    const act=e.target.dataset.act; if(!act||!menuChair) return; const ch=menuChair, t=ch.userData.table, s=chairSide(ch);
+    pushHistory();
+    if(act==='chair-del'){
+      if(isRect(t)) setRectSides(t, t.userData.seatsA-(s==='A'?1:0), t.userData.seatsB-(s==='B'?1:0));
+      else { t.userData.seats=Math.max(0,t.userData.seats-1); buildSettings(t); }
+    } else if(act==='chair-add'){
+      if(isRect(t)) setRectSides(t, t.userData.seatsA+(s==='A'?1:0), t.userData.seatsB+(s==='B'?1:0));
+      else { t.userData.seats=t.userData.seats+1; buildSettings(t); }
+    }
+    afterChange(false); closeMenu();
+  });
 
   // Меню по правому клику на стол.
   let menuTable=null;
@@ -733,7 +764,7 @@
     }
     closeMenu();
   });
-  addEventListener('pointerdown', (e)=>{ if(!e.target.closest('#objmenu') && !e.target.closest('#tablemenu')) closeMenu(); }, true);
+  addEventListener('pointerdown', (e)=>{ if(!e.target.closest('#objmenu') && !e.target.closest('#tablemenu') && !e.target.closest('#chairmenu')) closeMenu(); }, true);
 
   // Мягко раздвинуть букет, чтобы не налезал на другие букеты и тарелки.
   function resolveBouquetOverlap(b){
@@ -1082,7 +1113,7 @@
 
   window.hallDebug = { scene, camera, cam, tables, get selected(){return selected;}, createTable, addBouquet, computeWarnings, drag, TABLE_R, TABLE_H, pickables,
     enterWalk, exitWalk, sitAt, updateWalk, walk, keys, get mode(){return mode;},
-    dropBouquetToNearestTable, openBouquetMenu, openSeating, updateGuestNames, openTableMenu, setRectSides, chairSpacing };
+    dropBouquetToNearestTable, openBouquetMenu, openSeating, updateGuestNames, openTableMenu, openChairMenu, setRectSides, chairSpacing };
 })();
 </script>
 </body>

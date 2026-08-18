@@ -139,11 +139,15 @@ body.walk-mode #tools,body.walk-mode #panel,body.walk-mode #hint,body.walk-mode 
 #objmenu button.del:hover{background:#f6e0da;color:#c0553f}
 
 /* меню стола */
-#tablemenu{
+#tablemenu, #chairmenu{
   position:fixed;z-index:8;display:none;flex-direction:column;min-width:210px;padding:6px;gap:2px;
   background:var(--ui);backdrop-filter:blur(12px);border:1px solid var(--ui-line);border-radius:12px;box-shadow:var(--ui-shadow);
 }
-#tablemenu.show{display:flex}
+#tablemenu.show, #chairmenu.show{display:flex}
+#chairmenu > button{border:none;background:transparent;color:var(--ui-text);text-align:left;padding:9px 11px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit}
+#chairmenu > button:hover{background:var(--accent-soft);color:var(--accent-deep)}
+#chairmenu > button.del:hover{background:#f6e0da;color:#c0553f}
+#chairmenu .tm-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ui-muted);font-weight:700;padding:6px 11px 4px}
 #tablemenu .tm-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ui-muted);font-weight:700;padding:6px 11px 4px}
 #tablemenu .tm-guests{display:flex;align-items:center;gap:6px;padding:4px 11px 8px;font-size:13px;color:var(--ui-text);border-bottom:1px solid var(--ui-line);margin-bottom:4px}
 #tablemenu #tm-seatctl .tm-guests:not(:last-child){border-bottom:none;margin-bottom:0;padding-bottom:2px}
