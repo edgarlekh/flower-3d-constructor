@@ -256,6 +256,33 @@
     b.getWorldPosition(_bqp); bqRing.position.set(_bqp.x, TABLE_H+1, _bqp.z);
     const r=(b.userData.footprint||12)+5; bqRing.scale.set(r/12,1,r/12); bqRing.visible=true;
   }
+  // === слоты-квадратики: пустые места под стул у выбранного стола ===
+  const slotTex = (function(){ const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d');
+    x.clearRect(0,0,64,64); x.strokeStyle='rgba(219,39,119,.9)'; x.lineWidth=4; x.setLineDash([7,5]);
+    const r=9,a=8,b=56; x.beginPath(); x.moveTo(a+r,a); x.lineTo(b-r,a); x.arcTo(b,a,b,a+r,r); x.lineTo(b,b-r); x.arcTo(b,b,b-r,b,r); x.lineTo(a+r,b); x.arcTo(a,b,a,b-r,r); x.lineTo(a,a+r); x.arcTo(a,a,a+r,a,r); x.stroke();
+    x.setLineDash([]); x.strokeStyle='rgba(219,39,119,.95)'; x.lineWidth=5; x.beginPath(); x.moveTo(32,22); x.lineTo(32,42); x.moveTo(22,32); x.lineTo(42,32); x.stroke();
+    const t=new THREE.CanvasTexture(c); return t; })();
+  const slotMat = new THREE.MeshBasicMaterial({map:slotTex, transparent:true, depthWrite:false, opacity:.95});
+  const slotGeo = new THREE.PlaneGeometry(34,34);
+  const slotGroup = new THREE.Group(); scene.add(slotGroup);
+  function clearSlots(){ while(slotGroup.children.length) slotGroup.remove(slotGroup.children[0]); }
+  function updateSlotMarkers(){
+    clearSlots();
+    const t=selected;
+    if(!t || !isRect(t) || locked || viewOnly || mode!=='edit') return;
+    const G=t.userData.gaps||{};
+    const hl=t.userData.hl, hw=t.userData.hw;
+    const place=(key, n, kind)=>{ const gaps=G[key]||[]; gaps.forEach(i=>{ if(i>=n) return; let cx,cz;
+      if(kind==='long'){ const s=(key==='seatsA')?1:-1; cx=-hl+(i+0.5)/n*(2*hl); cz=s*(hw+22); }
+      else { const s=(key==='seatsE1')?1:-1; cz=-hw+(i+0.5)/n*(2*hw); cx=s*(hl+22); }
+      const [wx,wz]=localToWorld(t,cx,cz);
+      const m=new THREE.Mesh(slotGeo, slotMat); m.rotation.x=-Math.PI/2; m.rotation.z=-t.rotation.y; m.position.set(wx, 1.2, wz);
+      m.userData={ kind:'slot', table:t, side:key, slot:i }; slotGroup.add(m); }); };
+    place('seatsA', t.userData.seatsA||0, 'long'); place('seatsB', t.userData.seatsB||0, 'long');
+    place('seatsE1', t.userData.seatsE1||0, 'end'); place('seatsE2', t.userData.seatsE2||0, 'end');
+  }
+  function fillSlot(t, key, slot){ const g=t.userData.gaps&&t.userData.gaps[key]; if(!g) return; const j=g.indexOf(slot); if(j>=0){ g.splice(j,1); t.userData.seats=rectTotal(t); buildSettings(t); } }
+
   // прямоугольная рамка выделения (для банкетных столов)
   const selRect = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3()]),
     new THREE.LineBasicMaterial({color:0x9CB08A}));
@@ -421,6 +448,7 @@
     document.getElementById('p-warn').innerHTML = w.length
       ? `<div class="ptitle">Внимание</div>` + w.map(x=>`<div class="warn"><strong>${x[0]}.</strong> ${x[1]}</div>`).join('')
       : '';
+    updateSlotMarkers();
   }
 
   // Подлёт камеры к конкретному столу (двойной клик).
@@ -796,6 +824,18 @@
     },
   });
 
+  // Левый клик по пустому квадрату-слоту — поставить стул ровно туда.
+  let sdown=null;
+  renderer.domElement.addEventListener('pointerdown', e=>{ if(e.button===0) sdown={x:e.clientX,y:e.clientY}; });
+  renderer.domElement.addEventListener('pointerup', e=>{
+    if(e.button!==0 || !sdown) return; const moved=Math.hypot(e.clientX-sdown.x,e.clientY-sdown.y)>5; sdown=null;
+    if(moved || locked || mode!=='edit' || viewOnly || !slotGroup.children.length) return;
+    const r=rect(); const rc2=new THREE.Raycaster(), nd=new THREE.Vector2();
+    nd.x=((e.clientX-r.left)/r.width)*2-1; nd.y=-((e.clientY-r.top)/r.height)*2+1; rc2.setFromCamera(nd,camera);
+    const hit=rc2.intersectObjects(slotGroup.children,false)[0];
+    if(hit){ pushHistory(); const u=hit.object.userData; fillSlot(u.table,u.side,u.slot); updateSlotMarkers(); afterChange(false); }
+  });
+
   // Правая кнопка по букету — контекст-меню (левая двигает).
   let rdown = null;
   renderer.domElement.addEventListener('pointerdown', e=>{ if(e.button===2) rdown={x:e.clientX,y:e.clientY}; });
@@ -899,7 +939,7 @@
       ? seatRow('Сторона 1','seatsA',sideCount(t,'seatsA')) + seatRow('Сторона 2','seatsB',sideCount(t,'seatsB'))
         + seatRow('Торец 1','seatsE1',sideCount(t,'seatsE1')) + seatRow('Торец 2','seatsE2',sideCount(t,'seatsE2'))
       : seatRow('Гостей','seats',t.userData.seats);
-    if(isRect(t) && hasGaps(t)) html += `<button class="seat-compact" data-act="compact"><svg class="ic" viewBox="0 0 24 24"><path d="M8 7h8M8 12h8M8 17h8"/></svg>Расставить ровно</button>`;
+    if(isRect(t) && hasGaps(t)) html += `<button class="seat-compact" data-act="compact"><svg class="ic" viewBox="0 0 24 24"><path d="M8 7h8M8 12h8M8 17h8"/></svg>Выровнять · равные отступы</button>`;
     el.innerHTML = html;
     document.getElementById('p-seatlabel').textContent = isRect(t) ? 'Стулья по сторонам' : 'Гости за столом';
     renderDiagram(document.getElementById('p-diagram'), t.userData, null);
@@ -1129,7 +1169,7 @@
       ? 'Расстановка зафиксирована — ничего не сдвинуть. Нажмите «Разблокировать», чтобы менять.'
       : 'Тяните букет/тарелку · скатерть — весь стол · правый клик по столу — стулья по сторонам, рассадка, поворот · двойной клик — подлететь';
   }
-  function setLocked(v){ locked=v; if(locked) closeMenu(); updateLockUI(); saveHall(); }
+  function setLocked(v){ locked=v; if(locked) closeMenu(); updateLockUI(); updateSlotMarkers(); saveHall(); }
   document.getElementById('lock-btn').addEventListener('click', () => setLocked(!locked));
   document.getElementById('lockflag').addEventListener('click', () => setLocked(false));
   // спрятать / показать панель-инспектор
@@ -1268,7 +1308,7 @@
   function enterWalk(){
     document.body.classList.add('walk-mode'); document.getElementById('hint').classList.add('gone');
     fade(()=>{
-      mode='walk'; cam.setPaused(true);
+      mode='walk'; cam.setPaused(true); clearSlots();
       if (venueBounds){                                  // старт ВНУТРИ загруженной комнаты
         walk.x = venueBounds.cx; walk.z = venueBounds.cz + (venueBounds.maxZ-venueBounds.cz)*0.55;
         walk.yaw = Math.atan2(venueBounds.cx-walk.x, venueBounds.cz-walk.z);
@@ -1282,7 +1322,7 @@
       selRing.visible = false;
     });
   }
-  function exitWalk(){ fade(()=>{ mode='edit'; cam.setPaused(false); document.body.classList.remove('walk-mode'); frameAll(); if(selected) selRing.visible=true; }); }
+  function exitWalk(){ fade(()=>{ mode='edit'; cam.setPaused(false); document.body.classList.remove('walk-mode'); frameAll(); if(selected){ selRing.visible=true; updateSlotMarkers(); } }); }
   function standUp(){ walk.teye = EYE_STAND; walk.face = null; }
 
   // клик в прогулке: по столу — сесть (плавно подъедем), по полу — подойти
