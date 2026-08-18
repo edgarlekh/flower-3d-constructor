@@ -268,6 +268,11 @@
     const g=seatTable.userData.guests||(seatTable.userData.guests=[]); g[+i]=e.target.value; saveHall();
   });
   document.getElementById('seat-close').addEventListener('click', ()=>{ document.getElementById('seating').classList.remove('show'); seatTable=null; });
+  // поворот выбранного стола из панели (шаг 45°; два клика = 90°, горизонтально)
+  document.getElementById('p-table').addEventListener('click', (e)=>{
+    const btn=e.target.closest('.rotbtn'); if(!btn || !selected || viewOnly) return;
+    pushHistory(); selected.rotation.y += (+btn.dataset.rot)*Math.PI/4; selectTable(selected); saveHall();
+  });
   document.getElementById('seat-print').addEventListener('click', ()=> printSeating());
   function printSeating(){
     let html='<html><head><meta charset="utf-8"><title>Рассадка</title><style>body{font-family:Georgia,serif;padding:40px;color:#2a2622}h1{font-size:24px}h2{font-size:17px;margin:18px 0 6px;border-bottom:1px solid #ccc;padding-bottom:4px}ol{margin:0 0 12px 0}li{padding:2px 0}.empty{color:#999}</style></head><body>';
@@ -318,7 +323,8 @@
     const sz = t ? (isRect(t) ? `${t.userData.hl*2}×${t.userData.hw*2} см` : `⌀ ${tR(t)*2} см`) : '';
     const label = t ? (t.userData.name || ('Стол №'+(tables.indexOf(t)+1))) : '';
     document.getElementById('p-table').innerHTML = t
-      ? `<div class="ptitle">${label}</div><div class="pbig">${sz} · ${t.userData.seats} гост.</div>`
+      ? `<div class="ptitle">${label}</div><div class="pbig">${sz} · ${t.userData.seats} гост.</div>
+         <div class="prot"><span>Повернуть стол</span><button class="rotbtn" data-rot="-1" title="против часовой">⟲</button><button class="rotbtn" data-rot="1" title="по часовой">⟳</button></div>`
       : '<div class="pmuted">Стол не выбран</div>';
     // зазоры
     let gaps = '';

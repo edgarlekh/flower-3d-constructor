@@ -198,6 +198,10 @@ body.view-only #topbar,body.view-only #panel,body.view-only #tools .tgroup,body.
 .psec:empty{display:none}
 .ptitle{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ui-muted);font-weight:700;margin-bottom:6px}
 .pbig{font-size:15px;font-weight:700;color:var(--ui-text)}
+.prot{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12.5px;color:var(--ui-muted)}
+.prot span{flex:1}
+.prot .rotbtn{width:32px;height:30px;border-radius:9px;border:1px solid var(--ui-line);background:#fff;color:var(--ui-text);cursor:pointer;font-size:16px;line-height:1}
+.prot .rotbtn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .pmuted{color:var(--ui-muted);font-size:13px}
 .prow{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12.5px;padding:3px 0}
 .prow span{color:var(--ui-muted)}
