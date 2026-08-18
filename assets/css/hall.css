@@ -11,9 +11,9 @@ body{
   -webkit-font-smoothing:antialiased; overflow:hidden;
 }
 .label{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
-.serif{font-family:Georgia,"Iowan Old Style","Times New Roman",serif}
+.serif{font-family:"Cormorant Garamond",Georgia,"Times New Roman",serif;font-weight:600}
 
-#stage{position:fixed;inset:0;background:radial-gradient(120% 95% at 50% 6%,#FFFFFF 0%,#EFEDE7 60%,#DEDBD3 100%)}
+#stage{position:fixed;inset:0;background:radial-gradient(120% 95% at 50% 6%,#FFFFFF 0%,#FBF1F5 58%,#F1DFE9 100%)}
 canvas{display:block;touch-action:none}
 
 .scene-loader{
@@ -30,9 +30,11 @@ canvas{display:block;touch-action:none}
 
 /* палитра панелей управления — светлое стекло поверх светлой сцены */
 :root{
-  --ui:rgba(255,255,255,.9); --ui-line:#e7e1d8; --ui-text:#3a352f; --ui-muted:#8a8378;
-  --accent:#b5654a; --accent-deep:#97452f; --accent-soft:#f4e3db;
-  --ui-shadow:0 12px 34px rgba(60,45,35,.16);
+  --ui:rgba(255,255,255,.92); --ui-solid:#ffffff; --ui-line:#F0D3E1; --ui-line-soft:#F8E7EF;
+  --ui-text:#5C2038; --ui-muted:#9A6B82;
+  --accent:#DB2777; --accent-deep:#9D174D; --accent-soft:#FCE7F3;
+  --gold:#A16207; --gold-soft:#F6E7C6; --gold-line:#EAD3A0;
+  --ui-shadow:0 14px 40px rgba(120,30,70,.16); --ui-shadow-sm:0 6px 18px rgba(120,30,70,.12);
 }
 button{font-family:inherit}
 button:focus:not(:focus-visible){outline:none}
@@ -62,46 +64,50 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .guests button:hover{background:var(--accent-soft);color:var(--accent-deep)}
 
 /* инструменты — карточки с секциями */
-#tools{position:fixed;top:74px;right:12px;z-index:3;display:flex;flex-direction:column;gap:10px;width:190px}
+#tools{position:fixed;top:74px;right:12px;z-index:3;display:flex;flex-direction:column;gap:10px;width:200px}
 #tools .tgroup{
-  display:flex;flex-direction:column;gap:7px;padding:12px;border-radius:15px;
-  background:var(--ui);backdrop-filter:blur(12px);border:1px solid var(--ui-line);box-shadow:var(--ui-shadow);
+  display:flex;flex-direction:column;gap:7px;padding:12px;border-radius:16px;
+  background:var(--ui);backdrop-filter:blur(12px);border:1px solid var(--ui-line);box-shadow:var(--ui-shadow-sm);
 }
-#tools .tlabel{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ui-muted);font-weight:700;padding:1px 2px 3px}
+#tools .tlabel{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ui-muted);font-weight:800;padding:1px 2px 3px}
+#tools .tlabel-sub{padding-top:4px}
+.ic{width:17px;height:17px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #tools button{
+  display:flex;align-items:center;gap:9px;
   border:1px solid var(--ui-line);background:#fff;color:var(--ui-text);
-  border-radius:10px;padding:9px 12px;font-size:13px;cursor:pointer;font-weight:500;
-  transition:border-color .12s,color .12s,background .12s,transform .08s,box-shadow .12s;
+  border-radius:11px;padding:9px 12px;font-size:13px;cursor:pointer;font-weight:500;font-family:inherit;
+  transition:border-color .14s,color .14s,background .14s,transform .08s,box-shadow .14s;
 }
-#tools button:hover{border-color:var(--accent);color:var(--accent)}
+#tools button:hover{border-color:var(--accent);color:var(--accent-deep)}
+#tools button:active{transform:translateY(1px)}
+#tools .tgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+#tools .tgrid button{justify-content:center;padding:9px 8px;gap:6px}
 #tools select{
   width:100%;border:1px solid var(--ui-line);background:#fff;color:var(--ui-text);
-  border-radius:10px;padding:9px 10px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;
+  border-radius:11px;padding:9px 10px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;
 }
-#tools select:hover{border-color:var(--accent);color:var(--accent)}
-#tools button:active{transform:translateY(1px)}
-#tools button.primary{border-color:transparent;background:var(--accent);color:#fff;box-shadow:0 5px 16px rgba(181,101,74,.34)}
-#tools button.primary:hover{background:var(--accent-deep);color:#fff}
-#tools button.danger:hover{border-color:#c0553f;color:#c0553f}
-.cloth-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding-top:2px}
-.cloth-row .swatch{width:22px;height:22px;padding:0;border-radius:50%;border:1.5px solid var(--ui-line);cursor:pointer}
+#tools select:hover{border-color:var(--accent)}
+#tools button.primary{border-color:transparent;background:linear-gradient(180deg,#E84E9C,var(--accent));color:#fff;box-shadow:0 6px 16px rgba(219,39,119,.30)}
+#tools button.primary:hover{filter:brightness(1.05);color:#fff}
+#tools button.danger:hover{border-color:#d64562;color:#c0304f}
+#tools button.lock.on{border-color:var(--gold);background:var(--gold-soft);color:var(--gold);font-weight:600}
+.cloth-row{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding-top:2px}
+.cloth-row .swatch{width:23px;height:23px;padding:0;border-radius:50%;border:1.5px solid var(--ui-line);cursor:pointer;transition:transform .1s}
 .cloth-row .swatch:hover{transform:scale(1.12)}
 .cloth-row .swatch.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
-#tools > button#reset{
-  border:1px solid var(--ui-line);background:var(--ui);backdrop-filter:blur(12px);color:var(--ui-text);
-  border-radius:14px;padding:10px 12px;font-size:13px;cursor:pointer;font-weight:600;box-shadow:var(--ui-shadow);
-}
-#tools > button#reset:hover{border-color:var(--accent);color:var(--accent)}
-#tools > button#undo-btn{
-  border:1px solid var(--ui-line);background:var(--ui);backdrop-filter:blur(12px);color:var(--ui-text);
-  border-radius:14px;padding:9px 12px;font-size:12.5px;cursor:pointer;font-weight:600;box-shadow:var(--ui-shadow);
-}
-#tools > button#undo-btn:hover{border-color:var(--accent);color:var(--accent)}
-#tools > button#walk-btn{
-  border:1px solid transparent;background:#3a352f;color:#fff;
-  border-radius:14px;padding:11px 12px;font-size:13px;cursor:pointer;font-weight:600;box-shadow:var(--ui-shadow);
-}
-#tools > button#walk-btn:hover{background:#4a4239}
+
+/* нижняя панель действий (dock) */
+#dock{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:4;display:flex;gap:3px;
+  background:var(--ui);backdrop-filter:blur(14px);border:1px solid var(--ui-line);border-radius:16px;box-shadow:var(--ui-shadow);padding:6px}
+#dock button{display:inline-flex;align-items:center;gap:8px;border:none;background:transparent;color:var(--ui-text);
+  border-radius:11px;padding:9px 13px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .14s,color .14s,filter .14s}
+#dock button:hover{background:var(--accent-soft);color:var(--accent-deep)}
+#dock .dock-sep{width:1px;background:var(--ui-line);margin:5px 3px}
+#dock button#walk-btn.walk{color:var(--gold)}
+#dock button#walk-btn.walk:hover{background:var(--gold-soft)}
+#dock button#share-btn{background:linear-gradient(180deg,#E84E9C,var(--accent));color:#fff;margin-left:2px}
+#dock button#share-btn:hover{filter:brightness(1.05);color:#fff}
+body.walk-mode #dock{display:none}
 
 /* нижняя панель режима прогулки */
 #walkbar{
@@ -130,40 +136,28 @@ body.walk-mode #tools,body.walk-mode #panel,body.walk-mode #hint,body.walk-mode 
 }
 #fade.on{opacity:1}
 
-/* контекст-меню букета */
-#objmenu{
-  position:fixed;z-index:8;display:none;flex-direction:column;min-width:190px;padding:6px;gap:2px;
-  background:var(--ui);backdrop-filter:blur(12px);border:1px solid var(--ui-line);border-radius:12px;box-shadow:var(--ui-shadow);
+/* контекст-меню (букет / стол / стул) — единый стиль */
+.ctxmenu{
+  position:fixed;z-index:8;display:none;flex-direction:column;min-width:214px;padding:7px;gap:1px;
+  background:var(--ui);backdrop-filter:blur(14px);border:1px solid var(--ui-line);border-radius:14px;box-shadow:var(--ui-shadow);
 }
-#objmenu.show{display:flex}
-#objmenu button{
+.ctxmenu.show{display:flex}
+.ctxmenu .tm-title{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ui-muted);font-weight:800;padding:6px 10px 5px}
+.ctxmenu > button{
+  display:flex;align-items:center;gap:10px;
   border:none;background:transparent;color:var(--ui-text);text-align:left;
-  padding:9px 11px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;
+  padding:9px 10px;border-radius:9px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:500;
+  transition:background .12s,color .12s;
 }
-#objmenu button:hover{background:var(--accent-soft);color:var(--accent-deep)}
-#objmenu button.del:hover{background:#f6e0da;color:#c0553f}
-
-/* меню стола */
-#tablemenu, #chairmenu{
-  position:fixed;z-index:8;display:none;flex-direction:column;min-width:210px;padding:6px;gap:2px;
-  background:var(--ui);backdrop-filter:blur(12px);border:1px solid var(--ui-line);border-radius:12px;box-shadow:var(--ui-shadow);
-}
-#tablemenu.show, #chairmenu.show{display:flex}
-#chairmenu > button{border:none;background:transparent;color:var(--ui-text);text-align:left;padding:9px 11px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit}
-#chairmenu > button:hover{background:var(--accent-soft);color:var(--accent-deep)}
-#chairmenu > button.del:hover{background:#f6e0da;color:#c0553f}
-#chairmenu .tm-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ui-muted);font-weight:700;padding:6px 11px 4px}
-#tablemenu .tm-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ui-muted);font-weight:700;padding:6px 11px 4px}
-#tablemenu .tm-guests{display:flex;align-items:center;gap:6px;padding:4px 11px 8px;font-size:13px;color:var(--ui-text);border-bottom:1px solid var(--ui-line);margin-bottom:4px}
-#tablemenu #tm-seatctl .tm-guests:not(:last-child){border-bottom:none;margin-bottom:0;padding-bottom:2px}
-#tablemenu #tm-seatctl .tm-guests{font-size:12.5px}
-#tablemenu .tm-guests .sp{flex:1}
-#tablemenu .tm-guests b{min-width:20px;text-align:center;font-variant-numeric:tabular-nums}
-#tablemenu .tm-guests button{width:26px;height:26px;border-radius:7px;border:1px solid var(--ui-line);background:#fff;color:var(--ui-text);cursor:pointer;font-size:15px}
-#tablemenu .tm-guests button:hover{border-color:var(--accent);color:var(--accent)}
-#tablemenu > button{border:none;background:transparent;color:var(--ui-text);text-align:left;padding:9px 11px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit}
-#tablemenu > button:hover{background:var(--accent-soft);color:var(--accent-deep)}
-#tablemenu > button.del:hover{background:#f6e0da;color:#c0553f}
+.ctxmenu > button:hover{background:var(--accent-soft);color:var(--accent-deep)}
+.ctxmenu > button.del{color:#b64063}
+.ctxmenu > button.del:hover{background:#FBE0E8;color:#a3244a}
+.ctxmenu .tm-guests{display:flex;align-items:center;gap:6px;padding:5px 10px 8px;font-size:12.5px;color:var(--ui-text);border-bottom:1px solid var(--ui-line-soft);margin-bottom:4px}
+.ctxmenu #tm-seatctl .tm-guests:not(:last-child){border-bottom:none;margin-bottom:0;padding-bottom:3px}
+.ctxmenu .tm-guests .sp{flex:1}
+.ctxmenu .tm-guests b{min-width:20px;text-align:center;font-variant-numeric:tabular-nums;font-weight:600}
+.ctxmenu .tm-guests button{width:27px;height:27px;border-radius:8px;border:1px solid var(--ui-line);background:#fff;color:var(--ui-text);cursor:pointer;font-size:15px;display:grid;place-items:center;transition:border-color .12s,color .12s}
+.ctxmenu .tm-guests button:hover{border-color:var(--accent);color:var(--accent)}
 
 /* уведомление загрузки зала */
 #venue-msg{
@@ -173,12 +167,6 @@ body.walk-mode #tools,body.walk-mode #panel,body.walk-mode #hint,body.walk-mode 
 }
 #venue-msg.show{opacity:1}
 
-/* кнопка «поделиться» */
-#tools > button#share-btn{
-  border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent-deep);
-  border-radius:14px;padding:10px 12px;font-size:13px;cursor:pointer;font-weight:600;box-shadow:var(--ui-shadow);
-}
-#tools > button#share-btn:hover{background:var(--accent);color:#fff}
 
 /* режим клиента (открыто по ссылке) */
 #viewbanner{
@@ -190,7 +178,9 @@ body.walk-mode #tools,body.walk-mode #panel,body.walk-mode #hint,body.walk-mode 
 #viewbanner a{font-size:13px;color:var(--accent);text-decoration:none;font-weight:600}
 #viewbanner a:hover{color:var(--accent-deep)}
 body.view-only #viewbanner{display:flex}
-body.view-only #topbar,body.view-only #panel,body.view-only #tools .tgroup,body.view-only #share-btn{display:none}
+body.view-only #topbar,body.view-only #panel,body.view-only #tools{display:none}
+/* клиент по ссылке: из нижней панели оставляем только «Пройтись по залу» */
+body.view-only #dock #undo-btn,body.view-only #dock #reset,body.view-only #dock #share-btn,body.view-only #dock .dock-sep{display:none}
 
 /* левая панель: стол · размеры · внимание (сворачиваемая) */
 #panel{
@@ -208,7 +198,17 @@ body.view-only #topbar,body.view-only #panel,body.view-only #tools .tgroup,body.
 #panel.collapsed .pbody{display:none}
 .psec:empty{display:none}
 .ptitle{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ui-muted);font-weight:700;margin-bottom:6px}
+.pname{font-size:21px;line-height:1.1;color:var(--ui-text);letter-spacing:.01em;margin-bottom:3px}
+.psub{font-size:12.5px;color:var(--ui-muted)}
+.psub b{color:var(--ui-text);font-variant-numeric:tabular-nums}
 .pbig{font-size:15px;font-weight:700;color:var(--ui-text)}
+.pgaps{font-size:12.5px}
+.pgaps summary{list-style:none;cursor:pointer;color:var(--ui-muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;display:flex;align-items:center;justify-content:space-between;padding:2px 0}
+.pgaps summary::-webkit-details-marker{display:none}
+.pgaps summary::after{content:"показать ▾"}
+.pgaps[open] summary::after{content:"скрыть ▴"}
+.pgaps summary:hover{color:var(--accent-deep)}
+.pgaps-body{margin-top:6px}
 .prot{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12.5px;color:var(--ui-muted)}
 .prot span{flex:1}
 .prot .rotbtn{width:32px;height:30px;border-radius:9px;border:1px solid var(--ui-line);background:#fff;color:var(--ui-text);cursor:pointer;font-size:16px;line-height:1}
@@ -293,8 +293,6 @@ body.view-only #topbar,body.view-only #panel,body.view-only #tools .tgroup,body.
 #tm-diagram svg{max-height:92px}
 
 /* кнопка «Зафиксировать зал» */
-#tools > button#lock-btn{width:100%;margin-top:2px}
-#tools > button#lock-btn.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-deep);font-weight:600}
 body.locked #stage{cursor:default}
 
 /* === Мастер создания стола (модалка) === */
