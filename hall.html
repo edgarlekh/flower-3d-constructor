@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="assets/css/hall.css?v=2">
+<link rel="stylesheet" href="assets/css/hall.css?v=3">
 </head>
 <body>
 <div id="stage"></div>
@@ -42,10 +42,8 @@
   </div>
   <div class="tgroup">
     <span class="tlabel">Оформление</span>
-    <div class="tgrid">
-      <button id="add" class="primary"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v3M5.6 5.6l2.1 2.1M3 12h3M18 12h3M16.3 7.7l2.1-2.1"/><path d="M12 21c4 0 7-2.5 7-6 0-2-1.5-3-3.5-3S12 13 12 15c0-2-1.5-3-3.5-3S5 13 5 15c0 3.5 3 6 7 6Z"/></svg>Букет</button>
-      <button id="remove"><svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/></svg>Убрать</button>
-    </div>
+    <button id="add" class="primary"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v3M5.6 5.6l2.1 2.1M3 12h3M18 12h3M16.3 7.7l2.1-2.1"/><path d="M12 21c4 0 7-2.5 7-6 0-2-1.5-3-3.5-3S12 13 12 15c0-2-1.5-3-3.5-3S5 13 5 15c0 3.5 3 6 7 6Z"/></svg>Добавить букет на стол</button>
+    <span class="bq-hint" id="bq-hint">Ставится копия выбранного букета. Правый клик по букету — изменить состав или убрать.</span>
     <span class="tlabel tlabel-sub">Скатерть</span>
     <div class="cloth-row" id="cloth-colors">
       <button class="swatch" data-cloth="F3EEE6" style="background:#F3EEE6" title="Айвори"></button>
@@ -134,9 +132,16 @@
 <div id="fade"></div>
 <div id="objmenu" class="ctxmenu">
   <div class="tm-title">Букет</div>
+  <button data-act="compose"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Изменить состав</button>
   <button data-act="dup"><svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Дублировать</button>
-  <button data-act="edit"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Изменить в конструкторе</button>
-  <button data-act="del" class="del"><svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Удалить</button>
+  <button data-act="edit"><svg class="ic" viewBox="0 0 24 24"><path d="M14 3v5h5M9 15l2 2 4-4"/><path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7Z"/></svg>Открыть в конструкторе</button>
+  <button data-act="del" class="del"><svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Удалить букет</button>
+</div>
+<div id="bqedit" class="ctxmenu">
+  <div class="tm-title">Состав букета</div>
+  <div id="bq-rows"></div>
+  <div class="bq-addrow"><select id="bq-addsel"></select><button id="bq-addbtn" title="Добавить цветок">＋</button></div>
+  <button id="bq-done" class="bq-done">Готово</button>
 </div>
 <div id="chairmenu" class="ctxmenu">
   <div class="tm-title">Стул</div>
@@ -238,6 +243,19 @@
   const selRing = new THREE.Mesh(new THREE.TorusGeometry(TABLE_R + 12, 1.6, 8, 64),
     new THREE.MeshStandardMaterial({color:0x9CB08A, roughness:.6, emissive:0x2c3a22}));
   selRing.rotation.x = -Math.PI/2; selRing.position.y = 0.6; selRing.visible = false; scene.add(selRing);
+  // кольцо выделенного букета (чтобы было понятно, какой выбран)
+  const bqRing = new THREE.Mesh(new THREE.TorusGeometry(12, 1.2, 8, 40),
+    new THREE.MeshStandardMaterial({color:0xDB2777, roughness:.5, emissive:0x7a1840, emissiveIntensity:.6}));
+  bqRing.rotation.x = -Math.PI/2; bqRing.visible = false; scene.add(bqRing);
+  let selectedBouquet = null;
+  const _bqp = new THREE.Vector3();
+  function selectBouquet(b){ selectedBouquet = b || null; if(b && b.userData.spec) currentSpec = b.userData.spec; updateBqRing(); }
+  function updateBqRing(){
+    const b = selectedBouquet;
+    if(!b || !b.parent){ bqRing.visible=false; return; }
+    b.getWorldPosition(_bqp); bqRing.position.set(_bqp.x, TABLE_H+1, _bqp.z);
+    const r=(b.userData.footprint||12)+5; bqRing.scale.set(r/12,1,r/12); bqRing.visible=true;
+  }
   // прямоугольная рамка выделения (для банкетных столов)
   const selRect = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3()]),
     new THREE.LineBasicMaterial({color:0x9CB08A}));
@@ -463,19 +481,20 @@
   function seatDescriptors(t){
     const seats=t.userData.seats, out=[];
     if (isRect(t)){
-      const hl=t.userData.hl, hw=t.userData.hw;
-      const na=t.userData.seatsA||0, nb=t.userData.seatsB||0, ne1=t.userData.seatsE1||0, ne2=t.userData.seatsE2||0;
-      // длинные стороны (±z)
-      const side=(n,s)=>{ for(let i=0;i<n;i++){ const x=-hl + (i+0.5)/n*(2*hl);
-        out.push({ px:x, pz:s*(hw-15), cx:x, cz:s*(hw+22), srot:s>0?Math.PI:0, crot:s>0?Math.PI:0 }); } };
-      // торцы (±x) — стул смотрит вдоль длины стола
-      const end=(n,s)=>{ for(let i=0;i<n;i++){ const z=-hw + (i+0.5)/n*(2*hw); const rot=s>0?Math.PI/2:-Math.PI/2;
-        out.push({ px:s*(hl-15), pz:z, cx:s*(hl+22), cz:z, srot:rot, crot:rot }); } };
-      side(na,+1); side(nb,-1); end(ne1,+1); end(ne2,-1);
+      const hl=t.userData.hl, hw=t.userData.hw, G=t.userData.gaps||{};
+      const gap=(key,i)=>(G[key]||[]).indexOf(i)>=0;   // это место убрано точечно (дырка)
+      // длинные стороны (±z) — n=вместимость слотов, дырки пропускаем, позиции остальных не меняются
+      const side=(n,s,key)=>{ for(let i=0;i<n;i++){ if(gap(key,i)) continue; const x=-hl + (i+0.5)/n*(2*hl);
+        out.push({ px:x, pz:s*(hw-15), cx:x, cz:s*(hw+22), srot:s>0?Math.PI:0, crot:s>0?Math.PI:0, side:key, slot:i }); } };
+      // торцы (±x)
+      const end=(n,s,key)=>{ for(let i=0;i<n;i++){ if(gap(key,i)) continue; const z=-hw + (i+0.5)/n*(2*hw); const rot=s>0?Math.PI/2:-Math.PI/2;
+        out.push({ px:s*(hl-15), pz:z, cx:s*(hl+22), cz:z, srot:rot, crot:rot, side:key, slot:i }); } };
+      side(t.userData.seatsA||0,+1,'seatsA'); side(t.userData.seatsB||0,-1,'seatsB');
+      end(t.userData.seatsE1||0,+1,'seatsE1'); end(t.userData.seatsE2||0,-1,'seatsE2');
     } else {
       const R=tR(t);
       for(let i=0;i<seats;i++){ const a=i/seats*Math.PI*2-Math.PI/2, c=Math.cos(a), s=Math.sin(a);
-        out.push({ px:c*(R-16), pz:s*(R-16), cx:c*(R+22), cz:s*(R+22), srot:-a+Math.PI/2, crot:-a-Math.PI/2 }); }
+        out.push({ px:c*(R-16), pz:s*(R-16), cx:c*(R+22), cz:s*(R+22), srot:-a+Math.PI/2, crot:-a-Math.PI/2, side:'seats', slot:i }); }
     }
     return out;
   }
@@ -523,12 +542,28 @@
       if((t.userData.seatsE1||0)>=2) g.push(W/t.userData.seatsE1-45); if((t.userData.seatsE2||0)>=2) g.push(W/t.userData.seatsE2-45);
       return g.length ? Math.round(Math.min(...g)) : null; }
     const seats=Math.max(t.userData.seats,1); return Math.round(2*Math.PI*(tR(t)+22)/seats - 45); }
-  // Пересчитать общее число мест банкетного стола из сторон.
-  function rectTotal(t){ return (t.userData.seatsA||0)+(t.userData.seatsB||0)+(t.userData.seatsE1||0)+(t.userData.seatsE2||0); }
-  // Задать число стульев по стороне банкетного стола: key ∈ seatsA|seatsB|seatsE1|seatsE2.
-  function setRectSeats(t, key, n){ const cap=key.startsWith('seatsE')?2:12; t.userData[key]=Math.max(0,Math.min(cap,n)); t.userData.seats=rectTotal(t); buildSettings(t); }
-  // Совместимость: две длинные стороны разом.
+  // Реальное число стульев = вместимость сторон минус точечно убранные (дырки).
+  function rectTotal(t){ const G=t.userData.gaps||{}; const c=k=>Math.max(0,(t.userData[k]||0)-((G[k]||[]).length)); return c('seatsA')+c('seatsB')+c('seatsE1')+c('seatsE2'); }
+  // Задать вместимость стороны (счётчик). Дырки за пределами новой вместимости убираем.
+  function setRectSeats(t, key, n){ const cap=key.startsWith('seatsE')?2:12; t.userData[key]=Math.max(0,Math.min(cap,n));
+    if(t.userData.gaps&&t.userData.gaps[key]) t.userData.gaps[key]=t.userData.gaps[key].filter(i=>i<t.userData[key]);
+    t.userData.seats=rectTotal(t); buildSettings(t); }
   function setRectSides(t, a, b){ t.userData.seatsA=Math.max(0,a); t.userData.seatsB=Math.max(0,b); t.userData.seats=rectTotal(t); buildSettings(t); }
+  // Точечно убрать конкретный стул (оставить дырку, соседей не двигать).
+  function gapChair(t, key, slot){ if(key==='seats'){ t.userData.seats=Math.max(0,t.userData.seats-1); buildSettings(t); return; }
+    const g=t.userData.gaps[key]=(t.userData.gaps[key]||[]); if(g.indexOf(slot)<0) g.push(slot); t.userData.seats=rectTotal(t); buildSettings(t); }
+  // «+» на сторону: сперва вернуть последнюю дырку, иначе нарастить вместимость.
+  function addChairSide(t, key){ if(key==='seats'){ t.userData.seats=t.userData.seats+1; buildSettings(t); return; }
+    const g=t.userData.gaps[key]=(t.userData.gaps[key]||[]); if(g.length){ g.sort((a,b)=>a-b); g.pop(); t.userData.seats=rectTotal(t); buildSettings(t); }
+    else setRectSeats(t, key, (t.userData[key]||0)+1); }
+  // «−» на сторону: убрать последний стул дыркой (позиции остальных не трогаем).
+  function removeChairSide(t, key){ if(key==='seats'){ t.userData.seats=Math.max(0,t.userData.seats-1); buildSettings(t); return; }
+    const cap=t.userData[key]||0, g=t.userData.gaps[key]=(t.userData.gaps[key]||[]);
+    for(let i=cap-1;i>=0;i--){ if(g.indexOf(i)<0){ g.push(i); break; } } t.userData.seats=rectTotal(t); buildSettings(t); }
+  // Расставить стулья ровно: убрать все дырки, вместимость = текущему числу стульев.
+  function compactSeats(t){ if(!isRect(t)) return; const G=t.userData.gaps||{};
+    ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ const cap=t.userData[k]||0, gaps=(G[k]||[]).length; t.userData[k]=cap-gaps; });
+    t.userData.gaps={}; t.userData.seats=rectTotal(t); buildSettings(t); }
   // Мир↔локаль с учётом поворота стола (rotation.y).
   function localToWorld(t,lx,lz){ const a=t.rotation.y,c=Math.cos(a),s=Math.sin(a); return [t.position.x + c*lx + s*lz, t.position.z - s*lx + c*lz]; }
   function worldToLocal(t,wx,wz){ const a=t.rotation.y,c=Math.cos(a),s=Math.sin(a),dx=wx-t.position.x,dz=wz-t.position.z; return [c*dx - s*dz, s*dx + c*dz]; }
@@ -575,7 +610,7 @@
     const use = (saved && saved.length === seats) ? saved : null;
     desc.forEach((d,i)=>{
       const ch = chairMesh(); ch.position.set(d.cx,0,d.cz); ch.rotation.y=d.crot;
-      ch.userData={ kind:'chair', seatIdx:i, table:t }; sg.add(ch);
+      ch.userData={ kind:'chair', seatIdx:i, side:d.side, slot:d.slot, table:t }; sg.add(ch);
       const s = settingMesh();
       if (use){ s.position.set(use[i].x, TABLE_TOP, use[i].z); s.rotation.y = use[i].rot; }
       else { s.position.set(d.px, TABLE_TOP, d.pz); s.rotation.y = d.srot; }
@@ -617,6 +652,7 @@
       if(a==null||b==null){ const s=data.seats||8; a=Math.ceil(s/2); b=s-a; }   // миграция старого seats
       t.userData.seatsA=a; t.userData.seatsB=b;
       t.userData.seatsE1=data.seatsE1||0; t.userData.seatsE2=data.seatsE2||0;
+      t.userData.gaps = (data.gaps && typeof data.gaps==='object') ? JSON.parse(JSON.stringify(data.gaps)) : {};
       t.userData.seats=rectTotal(t);
     }
     if (shape==='rect'){
@@ -650,7 +686,7 @@
       x:+t.position.x.toFixed(1), z:+t.position.z.toFixed(1), seats:t.userData.seats,
       shape:t.userData.shape, hl:t.userData.hl, hw:t.userData.hw, R:t.userData.R,
       rot:+t.rotation.y.toFixed(3), name:t.userData.name||'', guests:(t.userData.guests||[]).slice(0,t.userData.seats),
-      seatsA:t.userData.seatsA, seatsB:t.userData.seatsB, seatsE1:t.userData.seatsE1, seatsE2:t.userData.seatsE2,
+      seatsA:t.userData.seatsA, seatsB:t.userData.seatsB, seatsE1:t.userData.seatsE1, seatsE2:t.userData.seatsE2, gaps:t.userData.gaps||{},
       bouquets: t.userData.bouquets.children.map(b=>({ spec:b.userData.spec, x:+b.position.x.toFixed(1), z:+b.position.z.toFixed(1) })),
       settings: t.userData.settings.children.filter(c=>c.userData.kind==='setting')
                  .map(s=>({ x:+s.position.x.toFixed(1), z:+s.position.z.toFixed(1), rot:+s.rotation.y.toFixed(3) })),
@@ -750,7 +786,7 @@
     setCameraPaused: (v) => cam.setPaused(v),
     moveTo: onMove,
     onGrab: (o) => { selectTable(o.userData.table);
-      if(o.userData.kind==='bouquet') currentSpec = o.userData.spec;   // тронутый букет становится «текущим» для копии
+      if(o.userData.kind==='bouquet') selectBouquet(o);                // тронутый букет становится выбранным (подсветка + «текущий» для копии)
       dragSnap = snapshot();                                           // снимок до перетаскивания (для отмены)
       document.getElementById('hint').classList.add('gone'); },
     onRelease: (o) => {
@@ -789,19 +825,17 @@
   // Меню по клику на букет: дублировать / изменить / удалить.
   let menuTarget = null;
   function openBouquetMenu(b, e){
-    menuTarget = b; const m=document.getElementById('objmenu');
+    menuTarget = b; selectBouquet(b); const m=document.getElementById('objmenu');
     const x=(e&&e.clientX)||200, y=(e&&e.clientY)||200;
-    m.style.left=Math.min(x, innerWidth-210)+'px'; m.style.top=Math.min(y, innerHeight-150)+'px';
-    m.classList.add('show');
+    m.style.left=Math.min(x, innerWidth-210)+'px'; m.style.top=Math.min(y, innerHeight-160)+'px';
+    document.getElementById('bqedit').classList.remove('show'); m.classList.add('show');
   }
-  function closeMenu(){ document.getElementById('objmenu').classList.remove('show'); document.getElementById('chairmenu').classList.remove('show'); menuTarget=null; menuChair=null; }
+  function closeMenu(){ document.getElementById('objmenu').classList.remove('show'); document.getElementById('chairmenu').classList.remove('show'); const be=document.getElementById('bqedit'); if(be) be.classList.remove('show'); menuTarget=null; menuChair=null; }
 
   // Меню по правому клику на стул: убрать этот / добавить ещё на эту сторону.
   let menuChair=null;
-  // По индексу места определяем сторону банкетного стола: seatsA|seatsB|seatsE1|seatsE2.
-  function chairSide(ch){ const t=ch.userData.table; if(!isRect(t)) return null;
-    const a=t.userData.seatsA||0, b=t.userData.seatsB||0, e1=t.userData.seatsE1||0, i=ch.userData.seatIdx;
-    if(i<a) return 'seatsA'; if(i<a+b) return 'seatsB'; if(i<a+b+e1) return 'seatsE1'; return 'seatsE2'; }
+  // Сторона стула хранится прямо в стуле (seatsA|seatsB|seatsE1|seatsE2|seats).
+  function chairSide(ch){ return ch.userData.side || (isRect(ch.userData.table)?'seatsA':'seats'); }
   function openChairMenu(ch, e){
     menuChair=ch; const m=document.getElementById('chairmenu');
     const x=(e&&e.clientX)||200, y=(e&&e.clientY)||200;
@@ -812,25 +846,21 @@
   document.getElementById('chairmenu').addEventListener('click', (e)=>{
     const act=e.target.dataset.act; if(!act||!menuChair) return; const ch=menuChair, t=ch.userData.table, s=chairSide(ch);
     pushHistory();
-    if(act==='chair-del'){
-      if(isRect(t)) setRectSeats(t, s, (t.userData[s]||0)-1);
-      else { t.userData.seats=Math.max(0,t.userData.seats-1); buildSettings(t); }
-    } else if(act==='chair-add'){
-      if(isRect(t)) setRectSeats(t, s, (t.userData[s]||0)+1);
-      else { t.userData.seats=t.userData.seats+1; buildSettings(t); }
-    }
+    if(act==='chair-del') gapChair(t, s, ch.userData.slot);     // точечно: остаётся дырка, соседи не двигаются
+    else if(act==='chair-add') addChairSide(t, s);
     afterChange(false); closeMenu();
   });
 
   // === Схема стола (вид сверху): показывает стулья по сторонам и подсвечивает нужную ===
   const SIDE_NAMES = { seatsA:'Сторона 1', seatsB:'Сторона 2', seatsE1:'Торец 1', seatsE2:'Торец 2', seats:'Гости вокруг' };
-  function dgChairs(n, x0,y0,W,H, side, hl){
-    let s=''; const cls = 'dg-chair'+(hl?' hl':'');
-    for(let i=0;i<n;i++){ let x,y,w,h;
+  function dgChairs(n, x0,y0,W,H, side, hl, gaps){
+    let s=''; gaps=gaps||[];
+    for(let i=0;i<n;i++){ let x,y,w,h; const gapped=gaps.indexOf(i)>=0;
       if(side==='bottom'){ w=13;h=8; x=x0+(i+0.5)/n*W-w/2; y=y0+H+5; }
       else if(side==='top'){ w=13;h=8; x=x0+(i+0.5)/n*W-w/2; y=y0-5-h; }
       else if(side==='right'){ w=8;h=13; x=x0+W+5; y=y0+(i+0.5)/n*H-h/2; }
       else { w=8;h=13; x=x0-5-w; y=y0+(i+0.5)/n*H-h/2; }
+      const cls = gapped ? 'dg-chair dg-gap' : ('dg-chair'+(hl?' hl':''));
       s+=`<rect class="${cls}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w}" height="${h}" rx="2.5"/>`; }
     return s;
   }
@@ -851,21 +881,26 @@
       : hl==='seatsB' ? `<line class="dg-edge" x1="${x0}" y1="${y0-o}" x2="${x0+W}" y2="${y0-o}"/>`
       : hl==='seatsE1' ? `<line class="dg-edge" x1="${x0+W+o}" y1="${y0}" x2="${x0+W+o}" y2="${y0+H}"/>`
       : hl==='seatsE2' ? `<line class="dg-edge" x1="${x0-o}" y1="${y0}" x2="${x0-o}" y2="${y0+H}"/>` : '';
+    const G=ud.gaps||{};
     el.innerHTML=`<svg viewBox="0 0 180 108"><rect class="dg-table" x="${x0}" y="${y0}" width="${W}" height="${H}" rx="5"/>${edge}`
-      + dgChairs(a,x0,y0,W,H,'bottom',hl==='seatsA') + dgChairs(b,x0,y0,W,H,'top',hl==='seatsB')
-      + dgChairs(e1,x0,y0,W,H,'right',hl==='seatsE1') + dgChairs(e2,x0,y0,W,H,'left',hl==='seatsE2')
+      + dgChairs(a,x0,y0,W,H,'bottom',hl==='seatsA',G.seatsA) + dgChairs(b,x0,y0,W,H,'top',hl==='seatsB',G.seatsB)
+      + dgChairs(e1,x0,y0,W,H,'right',hl==='seatsE1',G.seatsE1) + dgChairs(e2,x0,y0,W,H,'left',hl==='seatsE2',G.seatsE2)
       + `</svg>`+cap;
   }
 
   // Управление столом живёт в левой панели-инспекторе (попап-меню больше нет).
   let menuTable=null;   // (оставлено для closeMenu; не используется)
   const seatRow=(label,key,val)=>`<div class="tm-guests" data-key="${key}">${label}<span class="sp"></span><button data-seat="${key}" data-d="-1" aria-label="меньше">−</button><b>${val}</b><button data-seat="${key}" data-d="1" aria-label="больше">+</button></div>`;
+  const sideCount=(t,k)=>Math.max(0,(t.userData[k]||0)-((t.userData.gaps&&t.userData.gaps[k]||[]).length));
+  const hasGaps=(t)=>['seatsA','seatsB','seatsE1','seatsE2'].some(k=>(t.userData.gaps&&t.userData.gaps[k]||[]).length);
   function renderSeatCtl(t){
     const el=document.getElementById('p-seatctl'); if(!el||!t) return;
-    el.innerHTML = isRect(t)
-      ? seatRow('Сторона 1','seatsA',t.userData.seatsA) + seatRow('Сторона 2','seatsB',t.userData.seatsB)
-        + seatRow('Торец 1','seatsE1',t.userData.seatsE1||0) + seatRow('Торец 2','seatsE2',t.userData.seatsE2||0)
+    let html = isRect(t)
+      ? seatRow('Сторона 1','seatsA',sideCount(t,'seatsA')) + seatRow('Сторона 2','seatsB',sideCount(t,'seatsB'))
+        + seatRow('Торец 1','seatsE1',sideCount(t,'seatsE1')) + seatRow('Торец 2','seatsE2',sideCount(t,'seatsE2'))
       : seatRow('Гостей','seats',t.userData.seats);
+    if(isRect(t) && hasGaps(t)) html += `<button class="seat-compact" data-act="compact"><svg class="ic" viewBox="0 0 24 24"><path d="M8 7h8M8 12h8M8 17h8"/></svg>Расставить ровно</button>`;
+    el.innerHTML = html;
     document.getElementById('p-seatlabel').textContent = isRect(t) ? 'Стулья по сторонам' : 'Гости за столом';
     renderDiagram(document.getElementById('p-diagram'), t.userData, null);
   }
@@ -873,10 +908,12 @@
   pSeat.addEventListener('pointerover', (e)=>{ const r=e.target.closest('[data-key]'); if(selected) renderDiagram(document.getElementById('p-diagram'), selected.userData, r?r.dataset.key:null); });
   pSeat.addEventListener('pointerout', (e)=>{ if(!e.relatedTarget || !e.relatedTarget.closest('#p-seatctl')){ if(selected) renderDiagram(document.getElementById('p-diagram'), selected.userData, null); } });
   pSeat.addEventListener('click', (e)=>{
-    const t=selected, seatKey=e.target.dataset.seat; if(!t||!seatKey) return;
-    pushHistory(); const d=+e.target.dataset.d;
-    if(seatKey==='seats'){ t.userData.seats=Math.max(2,Math.min(20,t.userData.seats+d)); buildSettings(t); }
-    else setRectSeats(t, seatKey, (t.userData[seatKey]||0)+d);
+    const t=selected, btn=e.target.closest('button'); if(!t||!btn) return;
+    const seatKey=btn.dataset.seat, act=btn.dataset.act;
+    pushHistory();
+    if(act==='compact'){ compactSeats(t); }
+    else if(seatKey){ const d=+btn.dataset.d; if(d>0) addChairSide(t, seatKey); else removeChairSide(t, seatKey); }
+    else { closeMenu(); return; }
     renderSeatCtl(t); afterChange(false);
   });
   document.getElementById('p-acts').addEventListener('click', (e)=>{
@@ -887,9 +924,10 @@
     else if(act==='del'){ if(tables.length>1){ pushHistory(); scene.remove(t); tables.splice(tables.indexOf(t),1); selectTable(tables[0]); afterChange('all'); } }
   });
   document.getElementById('objmenu').addEventListener('click', (e)=>{
-    const act=e.target.dataset.act; if(!act||!menuTarget) return; const b=menuTarget, t=b.userData.table;
-    if(act==='dup'){ pushHistory(); const [x,z]=nextBouquetSpot(t); const nb=addBouquet(t, b.userData.spec, x, z); if(nb) resolveBouquetOverlap(nb); afterChange(false); }
-    else if(act==='del'){ pushHistory(); t.userData.bouquets.remove(b); afterChange(false); }
+    const btn=e.target.closest('button'); const act=btn&&btn.dataset.act; if(!act||!menuTarget) return; const b=menuTarget, t=b.userData.table;
+    if(act==='compose'){ openBouquetEdit(b, e); return; }
+    else if(act==='dup'){ pushHistory(); const [x,z]=nextBouquetSpot(t); const nb=addBouquet(t, b.userData.spec, x, z); if(nb){ resolveBouquetOverlap(nb); selectBouquet(nb); } afterChange(false); }
+    else if(act==='del'){ pushHistory(); t.userData.bouquets.remove(b); if(selectedBouquet===b) selectBouquet(null); afterChange(false); }
     else if(act==='edit'){
       const ref={ tableIdx: tables.indexOf(t), bouqIdx: t.userData.bouquets.children.indexOf(b) };
       try{ localStorage.setItem('flowerEditCart', JSON.stringify(Object.assign({}, b.userData.spec, {editRef:ref}))); }catch(_){}
@@ -897,7 +935,47 @@
     }
     closeMenu();
   });
-  addEventListener('pointerdown', (e)=>{ if(!e.target.closest('#objmenu') && !e.target.closest('#tablemenu') && !e.target.closest('#chairmenu')) closeMenu(); }, true);
+
+  // === Изменение состава букета прямо в зале (без ухода в конструктор) ===
+  let editBq = null, editSpec = null;
+  const FLORA = (window.CATALOG||[]).filter(x=>x.type==='flower');
+  const floraById = id => FLORA.find(f=>f.id===id);
+  const hex = c => '#'+('000000'+(c>>>0).toString(16)).slice(-6);
+  function rebuildEditBouquet(){
+    const t=editBq.userData.table, x=editBq.position.x, z=editBq.position.z;
+    t.userData.bouquets.remove(editBq);
+    const nb=addBouquet(t, JSON.parse(JSON.stringify(editSpec)), x, z);
+    editBq=nb; menuTarget=nb; selectBouquet(nb); afterChange(false);
+  }
+  function renderBqRows(){
+    const rows=document.getElementById('bq-rows'); const cart=editSpec.cart||{};
+    const ids=Object.keys(cart).filter(id=>cart[id]>0);
+    rows.innerHTML = ids.length ? ids.map(id=>{ const f=floraById(id)||{name:id,color:0xcccccc};
+      return `<div class="bq-row"><span class="bq-dot" style="background:${hex(f.color)}"></span><span class="bq-nm">${f.name}</span><span class="sp"></span>`+
+        `<button data-bq="${id}" data-d="-1">−</button><b>${cart[id]}</b><button data-bq="${id}" data-d="1">+</button></div>`;
+    }).join('') : '<div class="bq-empty">Пусто — добавьте цветок ниже</div>';
+    // список для добавления — то, чего ещё нет
+    const sel=document.getElementById('bq-addsel');
+    sel.innerHTML = FLORA.filter(f=>!(cart[f.id]>0)).map(f=>`<option value="${f.id}">${f.name}</option>`).join('') || '<option value="">— все добавлены —</option>';
+  }
+  function openBouquetEdit(b, e){
+    editBq=b; editSpec=JSON.parse(JSON.stringify(b.userData.spec||{cart:{}})); if(!editSpec.cart) editSpec.cart={};
+    selectBouquet(b); renderBqRows();
+    const m=document.getElementById('bqedit'); const x=(e&&e.clientX)||240, y=(e&&e.clientY)||160;
+    m.style.left=Math.min(x, innerWidth-250)+'px'; m.style.top=Math.min(y, innerHeight-320)+'px';
+    document.getElementById('objmenu').classList.remove('show'); m.classList.add('show');
+  }
+  document.getElementById('bq-rows').addEventListener('click',(e)=>{
+    const btn=e.target.closest('button'); if(!btn||!editBq) return; const id=btn.dataset.bq, d=+btn.dataset.d;
+    pushHistory(); editSpec.cart[id]=Math.max(0,(editSpec.cart[id]||0)+d); if(editSpec.cart[id]===0) delete editSpec.cart[id];
+    rebuildEditBouquet(); renderBqRows();
+  });
+  document.getElementById('bq-addbtn').addEventListener('click',()=>{
+    const id=document.getElementById('bq-addsel').value; if(!id||!editBq) return;
+    pushHistory(); editSpec.cart[id]=(editSpec.cart[id]||0)+1; rebuildEditBouquet(); renderBqRows();
+  });
+  document.getElementById('bq-done').addEventListener('click',()=>{ document.getElementById('bqedit').classList.remove('show'); editBq=null; });
+  addEventListener('pointerdown', (e)=>{ if(!e.target.closest('#objmenu') && !e.target.closest('#chairmenu') && !e.target.closest('#bqedit')) closeMenu(); }, true);
 
   // Мягко раздвинуть букет, чтобы не налезал на другие букеты и тарелки.
   function resolveBouquetOverlap(b){
@@ -1093,10 +1171,7 @@
   }
   document.getElementById('preset-select').addEventListener('change', (e)=>{ const v=e.target.value; e.target.value=''; applyPreset(v); });
   document.getElementById('add').addEventListener('click', () => {
-    if(!selected) return; pushHistory(); const [x,z]=nextBouquetSpot(selected); const nb=addBouquet(selected, currentSpec, x, z); if(nb) resolveBouquetOverlap(nb); afterChange(false);
-  });
-  document.getElementById('remove').addEventListener('click', () => {
-    if(!selected) return; pushHistory(); const bg=selected.userData.bouquets; if(bg.children.length) bg.remove(bg.children[bg.children.length-1]); afterChange(false);
+    if(!selected) return; pushHistory(); const [x,z]=nextBouquetSpot(selected); const nb=addBouquet(selected, currentSpec, x, z); if(nb){ resolveBouquetOverlap(nb); selectBouquet(nb); } afterChange(false);
   });
   function bumpGuests(t, d){
     if (isRect(t)){
@@ -1287,6 +1362,7 @@
     renderer.render(scene, camera);
     updateTableNums();
     updateGuestNames();
+    if(selectedBouquet) updateBqRing();
   }
 
   // --- старт: ссылка-просмотр (#v=...) имеет приоритет, иначе — своя расстановка ---
