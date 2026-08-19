@@ -123,8 +123,12 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
 </div>
 <div class="hint" id="hint">Клик — выбрать · тяни — двигать (можно вплотную) · клик по ＋ — стул · клик по стулу — убрать</div>
 
+<script src="assets/js/plan-geometry.js"></script>
 <script>
 const SVG='http://www.w3.org/2000/svg', floor=document.getElementById('floor');
+const PG=window.PlanGeometry;
+let nextIdSeq=1;
+const genId=()=> 't'+Date.now().toString(36)+(nextIdSeq++).toString(36);
 const HALL_KEY='flowerHall', ROOM_KEY='flowerRoom';
 const readJSON=k=>{try{return JSON.parse(localStorage.getItem(k));}catch(_){return null;}};
 let tables=[], objs=[], locked=false, showDist=true, selected=null, selObj=null, guides=[], VB={x:-650,z:-450,w:1300,h:900};
@@ -136,14 +140,21 @@ function load(){
   locked = !!(h && h.locked);
   tables = list.map(d=>{
     const t=Object.assign({}, d);
+    t.id = d.id || genId();
     t.shape = d.shape==='rect'?'rect':'round';
     t.x=+d.x||0; t.z=+d.z||0; t.rot=+d.rot||0; t.name=d.name||'';
     if(t.shape==='rect'){ t.hl=d.hl||120; t.hw=d.hw||45;
       let a=d.seatsA,b=d.seatsB; if(a==null||b==null){const s=d.seats||8;a=Math.ceil(s/2);b=s-a;}
       t.seatsA=a; t.seatsB=b; t.seatsE1=d.seatsE1||0; t.seatsE2=d.seatsE2||0;
       t.gaps=(d.gaps&&typeof d.gaps==='object'&&!Array.isArray(d.gaps))?d.gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]};
-      ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ if(!Array.isArray(t.gaps[k])) t.gaps[k]=[]; });
+      ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ if(!Array.isArray(t.gaps[k])) t.gaps[k]=[];
+        t.gaps[k]=PG.normalizeGaps(t[k]||0, t.gaps[k]); });
     } else { t.R=d.R||75; t.seats=d.seats||6; }
+    // NB: для круглых столов seatSlots/gaps/distributionMode вводятся в Этапе 2
+    // (вместе с логикой удаления/восстановления конкретного места) — здесь их
+    // преждевременная простановка без синхронизации с t.seats дала бы рассинхрон
+    // после reload (см. план).
+    t.groupId = d.groupId || null;
     t.bouquets=d.bouquets||[]; t.settings=d.settings||[];
     return t;
   });
@@ -400,11 +411,11 @@ document.querySelectorAll('.rotrow button').forEach(b=>b.addEventListener('click
 document.getElementById('i-name').addEventListener('change',e=>{ if(selected){ selected.name=e.target.value.trim(); render(); save(); } });
 document.getElementById('i-align').addEventListener('click',()=>{ const t=selected; if(!t)return; ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ t[k]-=t.gaps[k].length; t.gaps[k]=[]; }); render(); save(); });
 document.getElementById('i-del').addEventListener('click',()=>{ tables=tables.filter(x=>x!==selected); selected=null; render(); save(); });
-document.getElementById('i-dup').addEventListener('click',()=>{ if(!selected)return; const c=JSON.parse(JSON.stringify(selected)); c.x+=90;c.z+=90;c.name='';c.bouquets=[]; resolve(c); tables.push(c); selected=c; render(); save(); });
+document.getElementById('i-dup').addEventListener('click',()=>{ if(!selected)return; const c=JSON.parse(JSON.stringify(selected)); c.id=genId(); c.groupId=null; c.x+=90;c.z+=90;c.name='';c.bouquets=[]; resolve(c); tables.push(c); selected=c; render(); save(); });
 // ---- тулбар ----
 document.getElementById('addsel').addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(!v)return; const p=v.split('-'); const cx=VB.x+VB.w/2+(Math.random()*200-100), cz=VB.z+VB.h/2+(Math.random()*200-100);
-  let t; if(p[0]==='round') t={shape:'round',x:cx,z:cz,rot:0,R:+p[1]/2,seats:+p[2],bouquets:[],settings:[]};
-  else { const L=+p[1],W=+p[2],n=Math.max(2,Math.round(L/48)); t={shape:'rect',x:cx,z:cz,rot:0,hl:L/2,hw:W/2,seatsA:n,seatsB:n,seatsE1:0,seatsE2:0,gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]},bouquets:[],settings:[]}; }
+  let t; if(p[0]==='round') t={id:genId(),shape:'round',x:cx,z:cz,rot:0,R:+p[1]/2,seats:+p[2],bouquets:[],settings:[]};
+  else { const L=+p[1],W=+p[2],n=Math.max(2,Math.round(L/48)); t={id:genId(),shape:'rect',x:cx,z:cz,rot:0,hl:L/2,hw:W/2,seatsA:n,seatsB:n,seatsE1:0,seatsE2:0,gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]},bouquets:[],settings:[]}; }
   resolve(t); tables.push(t); selected=t; render(); save(); });
 document.getElementById('objsel').addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(!v)return; const d=OBJ[v]; objs.push({id:'o'+Date.now(),kind:v,x:VB.x+VB.w/2,z:VB.z+VB.h*0.72,rot:0,w:d.w,h:d.h,label:d.label,fill:d.fill,stroke:d.stroke}); render(); save(); });
 document.getElementById('preset').addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(!v)return; applyPreset(v); });
@@ -415,8 +426,8 @@ addEventListener('keydown',e=>{ if(e.key==='Delete'&&selObj){ objs=objs.filter(o
 
 const R90=Math.PI/2;
 function applyPreset(v){
-  const R=(x,z,rot,cap,name)=>({shape:'rect',x,z,rot,hl:120,hw:45,seatsA:cap.A,seatsB:cap.B,seatsE1:cap.E1||0,seatsE2:cap.E2||0,gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]},name:name||'',bouquets:[],settings:[]});
-  const O=(x,z,seats)=>({shape:'round',x,z,rot:0,R:75,seats,bouquets:[],settings:[]});
+  const R=(x,z,rot,cap,name)=>({id:genId(),shape:'rect',x,z,rot,hl:120,hw:45,seatsA:cap.A,seatsB:cap.B,seatsE1:cap.E1||0,seatsE2:cap.E2||0,gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]},name:name||'',bouquets:[],settings:[]});
+  const O=(x,z,seats)=>({id:genId(),shape:'round',x,z,rot:0,R:75,seats,bouquets:[],settings:[]});
   if(v==='u') tables=[R(0,-150,0,{A:6,B:0},'Молодожёны'),R(-95,30,R90,{A:0,B:5}),R(95,30,R90,{A:5,B:0})];
   else if(v==='head'){ tables=[R(0,-250,0,{A:6,B:0},'Президиум')]; for(let c=0;c<3;c++)for(let r=0;r<2;r++) tables.push(O((c-1)*330,60+r*330,8)); }
   else if(v==='grid'){ tables=[]; for(let r=0;r<3;r++)for(let c=0;c<3;c++) tables.push(O((c-1)*330,(r-1)*330,8)); }
