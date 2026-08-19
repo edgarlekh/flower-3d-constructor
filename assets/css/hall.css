@@ -356,10 +356,12 @@ body.locked #stage{cursor:default}
 .seat-compact{display:flex;align-items:center;gap:8px;width:100%;border:1px dashed var(--gold-line);background:var(--gold-soft);color:var(--gold);border-radius:9px;padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer;margin-top:5px;font-family:inherit}
 .seat-compact:hover{filter:brightness(.97)}
 .seat-compact .ic{width:15px;height:15px;stroke:var(--gold)}
-.dg-cap{text-align:center;font-size:12px;color:var(--ui-muted);margin-top:2px;min-height:16px}
+/* фикс. высота + без переноса — иначе смена текста при наведении (короткое/длинное)
+   сдвигает список строк ПОД КУРСОРОМ во время движения мыши к кнопке, и клик мажет мимо */
+.dg-cap{text-align:center;font-size:12px;color:var(--ui-muted);margin-top:2px;height:16px;line-height:16px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 4px}
 .dg-cap.hl{color:var(--accent-deep);font-weight:600}
 #tm-diagram{padding:4px 8px 2px}
-#tm-diagram .dg-cap{font-size:11px}
+#tm-diagram .dg-cap{font-size:11px;height:15px;line-height:15px}
 #tm-diagram svg{max-height:92px}
 
 /* кнопка «Зафиксировать зал» */
