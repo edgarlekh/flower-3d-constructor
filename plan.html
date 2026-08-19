@@ -163,13 +163,24 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
 <div class="hint" id="hint">Клик — выбрать · тяни — двигать (можно вплотную) · клик по ＋ — стул · клик по стулу — убрать</div>
 <div class="dockmask" id="dockmask">
   <div class="dockcard">
-    <div class="dockttl">Стыковка невозможна</div>
+    <div class="dockttl" id="dockttl">Стыковка невозможна</div>
     <div class="dockmsg" id="dockmsg">Стулья на обращённых сторонах занимают контактную зону. Что сделать?</div>
     <div class="dockconf" id="dockconf"></div>
     <div class="dockbtns">
       <button id="dock-remove">Убрать конфликтующие стулья</button>
+      <button id="dock-gap" style="display:none">Создать группу с зазором 80 см</button>
       <button id="dock-apart">Оставить столы раздельно</button>
       <button id="dock-cancel">Отмена</button>
+    </div>
+  </div>
+</div>
+<div class="dockmask" id="dockpreview">
+  <div class="dockcard">
+    <div class="dockttl" id="dp-ttl">Стыковка столов</div>
+    <div class="dockmsg" id="dp-msg"></div>
+    <div class="dockbtns">
+      <button id="dp-confirm">Состыковать</button>
+      <button id="dp-cancel">Отмена</button>
     </div>
   </div>
 </div>
@@ -372,6 +383,11 @@ function render(){
     gb.appendChild(el('rect',{x:-90,y:-18,width:180,height:36,rx:18,fill:'#FBF3DD',stroke:'#E4C98A','stroke-width':3}));
     const gt=el('text',{x:0,y:6,'text-anchor':'middle','font-size':20,'font-weight':800,fill:'#A16207'}); gt.textContent='👥 '+gname(selectedGroup); gb.appendChild(gt);
     floor.appendChild(gb); }
+  // ghost-preview будущего положения стола B при стыковке (ТЗ 3.5, пункт 4)
+  if(dockGhost){ const dg=dockGhost, gg=el('g',{transform:`translate(${dg.x},${dg.z}) rotate(${dg.rot*180/Math.PI})`,opacity:.55});
+    if(dg.shape==='round') gg.appendChild(el('circle',{r:dg.R,fill:'#FCE7F3',stroke:'#DB2777','stroke-width':3,'stroke-dasharray':'10 6'}));
+    else gg.appendChild(el('rect',{x:-dg.hl,y:-dg.hw,width:dg.hl*2,height:dg.hw*2,rx:14,fill:'#FCE7F3',stroke:'#DB2777','stroke-width':3,'stroke-dasharray':'10 6'}));
+    floor.appendChild(gg); }
   // подписи столов — верхний слой. Одинаковые столы должны выглядеть ОДИНАКОВО независимо от поворота:
   // подпись идёт вдоль ДЛИННОЙ стороны стола на экране (не всегда горизонтально) — тогда почти всегда
   // хватает места на полный размер шрифта; авто-уменьшение — лишь подстраховка для совсем узких случаев.
@@ -456,20 +472,96 @@ function findChairConflicts(t){ const mine=chairPartsWithMeta(t), myBody=tableBo
     mine.forEach(a=>{ if(boxOverlap(a,theirBody)) out.push({other:o,a,b:{side:'table',slot:-1,x:o.x,z:o.z}}); });
     theirs.forEach(b=>{ if(boxOverlap(myBody,b)) out.push({other:o,a:{side:'table',slot:-1,x:t.x,z:t.z},b}); }); });
   return out; }
+// ---- инструмент «Стыковать столы»: автоопределение сторон + расчёт целевого положения ----
+// Переводит МИРОВОЕ направление (dx,dz) в локальные оси стола t (обратный поворот t.rot).
+function worldToLocalDir(t,dx,dz){ const c=Math.cos(t.rot), s=Math.sin(t.rot); return {lx:c*dx-s*dz, lz:s*dx+c*dz}; }
+// Какой из 4 сторон прямоугольного стола обращена в направлении (dx,dz) от его центра.
+function facingSide(t,dx,dz){ if(t.shape!=='rect') return 'seats';
+  const {lx,lz}=worldToLocalDir(t,dx,dz);
+  return Math.abs(lx)>=Math.abs(lz) ? (lx>=0?'seatsE1':'seatsE2') : (lz>=0?'seatsA':'seatsB'); }
+// Полу-протяжённость стола (OBB), если его спроецировать на мировое направление (dx,dz) —
+// нужна, чтобы поставить два стола ровно впритык под любым углом, а не только 0/90°.
+function projHalfExtent(t,dx,dz){ if(t.shape==='round') return t.R;
+  const {lx,lz}=worldToLocalDir(t,dx,dz); return t.hl*Math.abs(lx)+t.hw*Math.abs(lz); }
+// Расчёт плана стыковки A (неподвижный) + B (подвигаем): режим (торец-к-торцу/бок-о-бок/
+// Г-образно/свободно) и целевые координаты B, чтобы он встал вплотную к A по стороне,
+// обращённой к его текущему положению — центры при этом остаются на одной линии
+// (перпендикулярного смещения не добавляем, как это уже делают готовые схемы приложения).
+function computeDockPlan(A,B){
+  let dx=B.x-A.x, dz=B.z-A.z, dist=Math.hypot(dx,dz)||1;
+  const sideA=facingSide(A,dx,dz), sideB=facingSide(B,-dx,-dz);
+  let ux=dx/dist, uz=dz/dist;
+  if(A.shape==='rect'){ // канонический мировой вектор нормали стороны A (не «сырое» направление на B) —
+    // так стыковка получается ровной даже если B изначально стоит немного наискось от A
+    const axis=(sideA==='seatsE1'||sideA==='seatsE2')?'x':'z', sign=(sideA==='seatsE1'||sideA==='seatsA')?1:-1;
+    const lx=axis==='x'?sign:0, lz=axis==='z'?sign:0, c=Math.cos(A.rot), s=Math.sin(A.rot);
+    ux=c*lx+s*lz; uz=-s*lx+c*lz; }
+  const gap=projHalfExtent(A,ux,uz)+projHalfExtent(B,ux,uz);
+  const longA=sideA==='seatsE1'||sideA==='seatsE2', longB=sideB==='seatsE1'||sideB==='seatsE2';
+  const type=(A.shape!=='rect'||B.shape!=='rect') ? 'free' : (longA&&longB?'end-to-end':(!longA&&!longB?'side-by-side':'L'));
+  return {x:A.x+ux*gap, z:A.z+uz*gap, sideA, sideB, type, dir:{x:ux,z:uz}};
+}
+const DOCK_TYPE_NAMES={'end-to-end':'Торец к торцу','side-by-side':'Бок о бок','L':'Г-образно','free':'Свободная стыковка'};
 function addGapAt(t,side,slot){ if(side==='table'||slot<0) return;
   if(side==='seats'){ const g=t.gaps=(t.gaps||[]); if(g.indexOf(slot)<0) g.push(slot); t.seats=Math.max(0,(t.seatSlots||0)-g.length); }
   else { const g=t.gaps[side]=(t.gaps[side]||[]); if(g.indexOf(slot)<0) g.push(slot); } }
-function showDockDialog(t,startX,startZ,conflicts){
+function showDockDialog(t,startX,startZ,conflicts,opts){ opts=opts||{};
   const mask=document.getElementById('dockmask');
+  document.getElementById('dockttl').textContent = opts.title || 'Стыковка невозможна';
+  document.getElementById('dockmsg').textContent = opts.message || 'Стулья на обращённых сторонах занимают контактную зону. Что сделать?';
   const lines=conflicts.slice(0,6).map(c=>`${tname(t)} / ${dispSide(c.a.side)}${c.a.slot>=0?' / место '+(c.a.slot+1):''} ↔ ${tname(c.other)} / ${dispSide(c.b.side)}${c.b.slot>=0?' / место '+(c.b.slot+1):''}`);
   document.getElementById('dockconf').innerHTML = (conflicts.length>1?`<b>${conflicts.length} конфликта</b><br>`:'') + lines.join('<br>');
   mask.classList.add('show');
-  const removeBtn=document.getElementById('dock-remove'), apartBtn=document.getElementById('dock-apart'), cancelBtn=document.getElementById('dock-cancel');
-  const cleanup=()=>{ mask.classList.remove('show'); removeBtn.onclick=apartBtn.onclick=cancelBtn.onclick=null; };
-  removeBtn.onclick=()=>{ conflicts.forEach(c=>{ addGapAt(t,c.a.side,c.a.slot); addGapAt(c.other,c.b.side,c.b.slot); }); cleanup(); render(); save(); };
-  apartBtn.onclick=()=>{ t.x=startX; t.z=startZ; cleanup(); render(); save(); };
-  cancelBtn.onclick=()=>{ cleanup(); render(); save(); };
+  const removeBtn=document.getElementById('dock-remove'), gapBtn=document.getElementById('dock-gap'), apartBtn=document.getElementById('dock-apart'), cancelBtn=document.getElementById('dock-cancel');
+  // «Создать группу с зазором» имеет смысл только в контексте инструмента стыковки (известен
+  // второй стол и направление докинга) — при обычном перетаскивании (Этап 4) кнопка скрыта.
+  gapBtn.style.display = opts.other ? 'flex' : 'none';
+  const cleanup=()=>{ mask.classList.remove('show'); removeBtn.onclick=gapBtn.onclick=apartBtn.onclick=cancelBtn.onclick=null; };
+  removeBtn.onclick=()=>{ conflicts.forEach(c=>{ addGapAt(t,c.a.side,c.a.slot); addGapAt(c.other,c.b.side,c.b.slot); }); cleanup(); render(); save(); if(opts.afterRemove) opts.afterRemove(); };
+  gapBtn.onclick=()=>{ if(opts.gapDir){ t.x+=opts.gapDir.x*80; t.z+=opts.gapDir.z*80; } cleanup(); render(); save(); if(opts.afterGap) opts.afterGap(); };
+  apartBtn.onclick=()=>{ t.x=startX; t.z=startZ; cleanup(); render(); save(); if(opts.afterApart) opts.afterApart(); };
+  cancelBtn.onclick=()=>{ cleanup(); render(); save(); if(opts.afterCancel) opts.afterCancel(); };
 }
+function createGroupFromDock(A,B,plan){
+  const g={id:genId(),tableIds:[A.id,B.id],type:plan.type,name:'',confirmed:true};
+  groups.push(g); A.groupId=g.id; B.groupId=g.id;
+  selected=null; selectedGroup=g; render(); save(); }
+// ---- инструмент «Стыковать столы»: выбор A → B → превью → подтверждение (ТЗ 3.5) ----
+let docking=false, dockA=null, dockGhost=null;
+const HINT_DEFAULT=document.getElementById('hint').textContent;
+function setDocking(v){ docking=v; dockA=null; dockGhost=null;
+  if(v){ selected=null; selectedGroup=null; selObj=null; }
+  document.getElementById('dockbtn').classList.toggle('on',v);
+  document.getElementById('hint').textContent = v?'Стыковка столов: выберите первый стол':HINT_DEFAULT;
+  render(); }
+function pickDockTable(t){
+  if(!dockA){ dockA=t; selected=t; selectedGroup=null; render();
+    document.getElementById('hint').textContent='Стыковка столов: выберите второй стол'; return; }
+  if(t===dockA) return;
+  const A=dockA, B=t, plan=computeDockPlan(A,B);
+  setDocking(false);
+  showDockPreview(A,B,plan);
+}
+function showDockPreview(A,B,plan){
+  dockGhost={shape:B.shape,x:plan.x,z:plan.z,rot:B.rot,hl:B.hl,hw:B.hw,R:B.R};
+  const guests=seatCount(A)+seatCount(B);
+  document.getElementById('dp-ttl').textContent=DOCK_TYPE_NAMES[plan.type]||'Стыковка столов';
+  document.getElementById('dp-msg').textContent=`${tname(A)} + ${tname(B)} — ${guests} гостей всего. Стол «${tname(B)}» встанет вплотную к «${tname(A)}».`;
+  render();
+  const mask=document.getElementById('dockpreview'); mask.classList.add('show');
+  const confirmBtn=document.getElementById('dp-confirm'), cancelBtn=document.getElementById('dp-cancel');
+  const cleanup=()=>{ mask.classList.remove('show'); confirmBtn.onclick=cancelBtn.onclick=null; };
+  confirmBtn.onclick=()=>{
+    const startX=B.x, startZ=B.z; cleanup(); dockGhost=null;
+    B.x=plan.x; B.z=plan.z; render(); save();
+    const conflicts=findChairConflicts(B).filter(c=>c.other===A); // в паре стыковки нас интересует только конфликт именно с A
+    if(conflicts.length){ showDockDialog(B,startX,startZ,conflicts,{
+      title:DOCK_TYPE_NAMES[plan.type]+' — конфликт стульев', other:A, gapDir:plan.dir,
+      afterRemove:()=>createGroupFromDock(A,B,plan), afterGap:()=>createGroupFromDock(A,B,plan) }); }
+    else createGroupFromDock(A,B,plan); };
+  cancelBtn.onclick=()=>{ cleanup(); dockGhost=null; render(); };
+}
+document.getElementById('dockbtn').addEventListener('click',()=>setDocking(!docking));
 // привязка (умные направляющие): центр, левый/правый край, торец-к-стороне (буквой Г) — по СТОЛЕШНИЦЕ,
 // финальный зазор от стульев соседа потом гарантирует resolve()
 function snap(t){ guides=[]; const TH=14; const et=halfExt(t); const GAP=300;
@@ -487,6 +579,7 @@ function snap(t){ guides=[]; const TH=14; const et=halfExt(t); const GAP=300;
 function svgPt(e){ const r=floor.getBoundingClientRect(); return {x:VB.x+(e.clientX-r.left)/r.width*VB.w, z:VB.z+(e.clientY-r.top)/r.height*VB.h}; }
 let drag=null, pan=null;
 floor.addEventListener('pointerdown',e=>{
+  if(!locked && docking){ const g=e.target.closest('g[data-id]'); if(g) pickDockTable(tables[+g.dataset.id]); return; }
   if(!locked){
     const chair=e.target.closest('[data-chair]');
     if(chair){ const t=tables[+chair.dataset.id], key=chair.dataset.side, slot=+chair.dataset.slot;
@@ -673,7 +766,8 @@ document.getElementById('preset').addEventListener('change',e=>{ const v=e.targe
 document.getElementById('distbtn').addEventListener('click',function(){ showDist=!showDist; this.classList.toggle('on',showDist); render(); });
 document.getElementById('lockbtn').addEventListener('click',function(){ locked=!locked; this.classList.toggle('on',locked); if(locked){selected=null;selObj=null;} render(); save(); });
 document.getElementById('fitbtn').addEventListener('click',fitView);
-addEventListener('keydown',e=>{ if(e.key==='Delete'&&selObj){ objs=objs.filter(o=>o.id!==selObj); selObj=null; render(); save(); } });
+addEventListener('keydown',e=>{ if(e.key==='Delete'&&selObj){ objs=objs.filter(o=>o.id!==selObj); selObj=null; render(); save(); }
+  if(e.key==='Escape'&&docking) setDocking(false); });
 
 const R90=Math.PI/2;
 function applyPreset(v){
