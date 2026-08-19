@@ -451,7 +451,11 @@ document.getElementById('i-name').addEventListener('change',e=>{ if(selected){ s
 document.getElementById('i-align').addEventListener('click',()=>{ const t=selected; if(!t)return;
   if(t.shape==='round'){ // отдельное осознанное действие: сбросить фиксированные дырки и пересчитать слоты под текущих гостей
     t.seatSlots=Math.max(0,(t.seatSlots||0)-(t.gaps||[]).length); t.gaps=[]; t.distributionMode='even'; t.seats=t.seatSlots; }
-  else { ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ t[k]-=t.gaps[k].length; t.gaps[k]=[]; }); }
+  else { // «Выровнять» = закрыть дырки, не уменьшая физическую вместимость стороны:
+    // seatsA/B/E1/E2 — это число СЛОТОВ (не гостей), его трогать нельзя, иначе
+    // «выравнивание» тихо уменьшает вместимость (это была реальная ошибка).
+    // Занятые стулья и так распределяются по всей длине стороны через chairSlots().
+    ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ t.gaps[k]=[]; }); }
   render(); save(); });
 document.getElementById('i-del').addEventListener('click',()=>{ tables=tables.filter(x=>x!==selected); selected=null; render(); save(); });
 document.getElementById('i-dup').addEventListener('click',()=>{ if(!selected)return; const c=JSON.parse(JSON.stringify(selected)); c.id=genId(); c.groupId=null; c.x+=90;c.z+=90;c.name='';c.bouquets=[]; resolve(c); tables.push(c); selected=c; render(); save(); });

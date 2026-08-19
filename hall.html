@@ -599,10 +599,10 @@
   function removeChairSide(t, key){ if(key==='seats'){ t.userData.seats=Math.max(0,t.userData.seats-1); buildSettings(t); return; }
     const cap=t.userData[key]||0, g=t.userData.gaps[key]=(t.userData.gaps[key]||[]);
     for(let i=cap-1;i>=0;i--){ if(g.indexOf(i)<0){ g.push(i); break; } } t.userData.seats=rectTotal(t); buildSettings(t); }
-  // Расставить стулья ровно: убрать все дырки, вместимость = текущему числу стульев.
-  function compactSeats(t){ if(!isRect(t)) return; const G=t.userData.gaps||{};
-    ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ const cap=t.userData[k]||0, gaps=(G[k]||[]).length; t.userData[k]=cap-gaps; });
-    t.userData.gaps={}; t.userData.seats=rectTotal(t); buildSettings(t); }
+  // Расставить стулья ровно: закрыть дырки, не уменьшая физическую вместимость
+  // стороны (seatsA/B/E1/E2 — число слотов, а не гостей; раньше это тихо срезало
+  // вместимость до текущего числа стульев — та же ошибка, что была в plan.html).
+  function compactSeats(t){ if(!isRect(t)) return; t.userData.gaps={}; t.userData.seats=rectTotal(t); buildSettings(t); }
   // Мир↔локаль с учётом поворота стола (rotation.y).
   function localToWorld(t,lx,lz){ const a=t.rotation.y,c=Math.cos(a),s=Math.sin(a); return [t.position.x + c*lx + s*lz, t.position.z - s*lx + c*lz]; }
   function worldToLocal(t,wx,wz){ const a=t.rotation.y,c=Math.cos(a),s=Math.sin(a),dx=wx-t.position.x,dz=wz-t.position.z; return [c*dx - s*dz, s*dx + c*dz]; }
