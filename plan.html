@@ -30,6 +30,8 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
 #top .to3d{display:inline-flex;align-items:center;gap:8px;border:none;background:linear-gradient(180deg,#E84E9C,var(--rose));color:#fff;border-radius:11px;padding:10px 15px;font-size:13.5px;font-weight:600;cursor:pointer;box-shadow:0 8px 20px rgba(219,39,119,.3);text-decoration:none}
 .floor{position:fixed;inset:56px 0 0 0;touch-action:none;display:block;width:100%;height:calc(100% - 56px);
   background:radial-gradient(90% 90% at 50% 40%,#fff,#FCF1F6 70%,#F3E1EA)}
+#scalebar{position:fixed;right:16px;bottom:12px;z-index:6;display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--ink2);pointer-events:none}
+#scalebar .bar{position:relative;height:7px;border-left:1.5px solid var(--ink2);border-right:1.5px solid var(--ink2);border-bottom:1.5px solid var(--ink2)}
 #bar{position:fixed;top:66px;left:12px;z-index:8;display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:calc(100% - 24px)}
 #bar button,#bar select{border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(10px);color:var(--ink);border-radius:11px;padding:8px 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(120,30,70,.08)}
 #bar button{display:inline-flex;align-items:center;gap:7px}
@@ -89,6 +91,7 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
 </div>
 <div class="badge" id="stat">—</div>
 <svg class="floor" id="floor"></svg>
+<div id="scalebar"><div class="bar" id="scalebar-bar"></div><span id="scalebar-txt">1 м</span></div>
 <div class="insp" id="insp">
   <div class="g"></div>
   <input class="nm" id="i-name" maxlength="26">
@@ -155,8 +158,50 @@ const tsize=t=> t.shape==='round'? ('⌀ '+(t.R*2)+' см') : (t.hl*2+'×'+t.hw*
 const OBJ={floor:{w:400,h:300,label:'Танцпол',fill:'#F3E7DF',stroke:'#DFC7B4'},stage:{w:360,h:120,label:'Сцена',fill:'#EAD9E6',stroke:'#D3B7CC'},bar:{w:220,h:80,label:'Бар',fill:'#DCE6DE',stroke:'#B7CDBE'},arch:{w:160,h:40,label:'Арка',fill:'#F6E7C6',stroke:'#E4C98A'}};
 function el(tag,a){ const e=document.createElementNS(SVG,tag); for(const k in a) e.setAttribute(k,a[k]); return e; }
 function setVB(){ floor.setAttribute('viewBox',`${VB.x} ${VB.z} ${VB.w} ${VB.h}`); }
+// ---- defs: глянец столешницы + мягкая тень ----
+function drawDefs(){
+  const defs=el('defs',{});
+  const grad=el('linearGradient',{id:'tblGrad',x1:'0',y1:'0',x2:'0',y2:'1'});
+  grad.appendChild(el('stop',{offset:'0','stop-color':'#ffffff'}));
+  grad.appendChild(el('stop',{offset:'1','stop-color':'#FBEDF3'}));
+  defs.appendChild(grad);
+  const filt=el('filter',{id:'tblShadow',x:'-60%',y:'-60%',width:'220%',height:'220%'});
+  filt.appendChild(el('feDropShadow',{dx:'0',dy:'14','stdDeviation':'11','flood-color':'#6E1B41','flood-opacity':'0.38'}));
+  defs.appendChild(filt);
+  floor.appendChild(defs);
+}
+// ---- размерная сетка в метрах: адаптивные деления + подписи + бегущий масштаб ----
+function drawGrid(){
+  const rect=floor.getBoundingClientRect();
+  const pxPerCm = (rect.width&&VB.w) ? rect.width/VB.w : 1;
+  const minor=100, major=500; // 1 м / 5 м
+  const showMinor = minor*pxPerCm >= 13;
+  const labelMinor = minor*pxPerCm >= 45; // подписываем и метровые линии, если есть место
+  const TOP_EXCLUDE_PX=112; // не залезать под тулбар/бейдж сверху
+  const g=el('g',{});
+  const x0=Math.floor(VB.x/minor)*minor, x1=Math.ceil((VB.x+VB.w)/minor)*minor;
+  const z0=Math.floor(VB.z/minor)*minor, z1=Math.ceil((VB.z+VB.h)/minor)*minor;
+  const yBottom = VB.z+VB.h-16; // подписи вертикальных линий — у нижнего края (верх занят тулбаром)
+  const LEFT_EXCLUDE_PX=44, BOTTOM_EXCLUDE_PX=30; // не давать подписям двух осей слипаться в углу
+  for(let x=x0;x<=x1;x+=minor){ const isMaj=Math.round(x)%major===0; if(!isMaj&&!showMinor) continue;
+    g.appendChild(el('line',{x1:x,y1:VB.z,x2:x,y2:VB.z+VB.h,stroke:isMaj?'#E7B7CE':'#F2DEE9','stroke-width':isMaj?1.4:1,'vector-effect':'non-scaling-stroke',opacity:isMaj?0.9:0.55}));
+    const clearsLeft=(x-VB.x)*pxPerCm >= LEFT_EXCLUDE_PX;
+    if((isMaj||labelMinor) && clearsLeft){ const t=el('text',{x:x+6,y:yBottom,'font-size':isMaj?13:11,fill:isMaj?'#BB8298':'#D2A7BA','font-weight':isMaj?700:600,'pointer-events':'none'}); t.textContent=(x/100)+' м'; g.appendChild(t); } }
+  for(let z=z0;z<=z1;z+=minor){ const isMaj=Math.round(z)%major===0; if(!isMaj&&!showMinor) continue;
+    g.appendChild(el('line',{x1:VB.x,y1:z,x2:VB.x+VB.w,y2:z,stroke:isMaj?'#E7B7CE':'#F2DEE9','stroke-width':isMaj?1.4:1,'vector-effect':'non-scaling-stroke',opacity:isMaj?0.9:0.55}));
+    const clearsTop = (z-VB.z)*pxPerCm >= TOP_EXCLUDE_PX;
+    const clearsBottom = (VB.z+VB.h-z)*pxPerCm >= BOTTOM_EXCLUDE_PX;
+    if((isMaj||labelMinor) && clearsTop && clearsBottom){ const t=el('text',{x:VB.x+7,y:z-6,'font-size':isMaj?13:11,fill:isMaj?'#BB8298':'#D2A7BA','font-weight':isMaj?700:600,'pointer-events':'none'}); t.textContent=(z/100)+' м'; g.appendChild(t); } }
+  floor.appendChild(g);
+  updateScaleBar(pxPerCm);
+}
+const NICE_M=[1,2,5,10,20,50,100,200,500];
+function updateScaleBar(pxPerCm){ const bar=document.getElementById('scalebar-bar'), txt=document.getElementById('scalebar-txt'); if(!bar||!pxPerCm) return;
+  const pxPerM=pxPerCm*100; let best=NICE_M[0],bestD=1e9; NICE_M.forEach(m=>{ const w=m*pxPerM; const d=Math.abs(w-90); if(w>=50&&w<=170&&d<bestD){bestD=d;best=m;} });
+  bar.style.width=Math.round(best*pxPerM)+'px'; txt.textContent=best+' м'; }
 function render(){
   setVB(); floor.innerHTML='';
+  drawDefs(); drawGrid();
   guides.forEach(g=>{ floor.appendChild(g.axis==='x'?el('line',{x1:g.pos,y1:VB.z,x2:g.pos,y2:VB.z+VB.h,stroke:'#DB2777','stroke-width':2,'stroke-dasharray':'6 8',opacity:.8}):el('line',{x1:VB.x,y1:g.pos,x2:VB.x+VB.w,y2:g.pos,stroke:'#DB2777','stroke-width':2,'stroke-dasharray':'6 8',opacity:.8})); });
   // объекты зала (под столами)
   objs.forEach(o=>{ const g=el('g',{transform:`translate(${o.x},${o.z}) rotate(${(o.rot||0)*180/Math.PI})`}); g.dataset.obj=o.id; g.style.cursor=locked?'default':'move';
@@ -167,8 +212,10 @@ function render(){
   // столы
   tables.forEach(t=>{ const sel=selected===t; const g=el('g',{}); g.dataset.id=tables.indexOf(t); g.style.cursor=locked?'default':'move';
     const body=el('g',{transform:`translate(${t.x},${t.z}) rotate(${t.rot*180/Math.PI})`});
-    if(t.shape==='round'){ if(sel) body.appendChild(el('circle',{r:t.R+12,fill:'none',stroke:'#DB2777','stroke-width':5})); body.appendChild(el('circle',{r:t.R,fill:'#fff',stroke:'#E7C4D5','stroke-width':4})); }
-    else { if(sel) body.appendChild(el('rect',{x:-t.hl-12,y:-t.hw-12,width:t.hl*2+24,height:t.hw*2+24,rx:18,fill:'none',stroke:'#DB2777','stroke-width':5})); body.appendChild(el('rect',{x:-t.hl,y:-t.hw,width:t.hl*2,height:t.hw*2,rx:14,fill:'#fff',stroke:'#E7C4D5','stroke-width':4})); }
+    const top=el('g',{filter:'url(#tblShadow)'});
+    if(t.shape==='round'){ if(sel) body.appendChild(el('circle',{r:t.R+12,fill:'none',stroke:'#DB2777','stroke-width':5})); top.appendChild(el('circle',{r:t.R,fill:'url(#tblGrad)',stroke:'#E7C4D5','stroke-width':4})); }
+    else { if(sel) body.appendChild(el('rect',{x:-t.hl-12,y:-t.hw-12,width:t.hl*2+24,height:t.hw*2+24,rx:18,fill:'none',stroke:'#DB2777','stroke-width':5})); top.appendChild(el('rect',{x:-t.hl,y:-t.hw,width:t.hl*2,height:t.hw*2,rx:14,fill:'url(#tblGrad)',stroke:'#E7C4D5','stroke-width':4})); }
+    body.appendChild(top);
     g.appendChild(body);
     if(t.bouquets&&t.bouquets.length) g.appendChild(el('circle',{cx:t.x,cy:t.z,r:14,fill:'#F4C6D9'}));
     chairSlots(t).forEach(c=>{ if(c.gapped && !sel) return; const cg=el('g',{transform:`translate(${c.x},${c.z}) rotate(${(c.rot||0)*180/Math.PI})`}); cg.style.cursor='pointer'; cg.dataset.id=tables.indexOf(t); cg.dataset.side=c.side; cg.dataset.slot=c.slot; cg.dataset.chair='1';
