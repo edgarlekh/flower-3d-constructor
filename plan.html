@@ -28,8 +28,9 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
 #top a.nav:hover{color:var(--rose)}
 #top .sp{flex:1}
 #top .to3d{display:inline-flex;align-items:center;gap:8px;border:none;background:linear-gradient(180deg,#E84E9C,var(--rose));color:#fff;border-radius:11px;padding:10px 15px;font-size:13.5px;font-weight:600;cursor:pointer;box-shadow:0 8px 20px rgba(219,39,119,.3);text-decoration:none}
-.floor{position:fixed;inset:56px 0 0 0;touch-action:none;display:block;width:100%;height:calc(100% - 56px);
+.floor{position:fixed;inset:56px 0 0 0;touch-action:none;display:block;width:100%;height:calc(100% - 56px);cursor:grab;
   background:radial-gradient(90% 90% at 50% 40%,#fff,#FCF1F6 70%,#F3E1EA)}
+.floor.panning{cursor:grabbing}
 #scalebar{position:fixed;right:16px;bottom:12px;z-index:6;display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--ink2);pointer-events:none}
 #scalebar .bar{position:relative;height:7px;border-left:1.5px solid var(--ink2);border-right:1.5px solid var(--ink2);border-bottom:1.5px solid var(--ink2)}
 #bar{position:fixed;top:66px;left:12px;z-index:8;display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:calc(100% - 24px)}
@@ -54,6 +55,20 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
 .insp .row button{width:24px;height:24px;border-radius:7px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;font-size:14px}
 .insp .row button:hover{border-color:var(--rose);color:var(--rose)}
 .insp .row b{min-width:14px;text-align:center;font-variant-numeric:tabular-nums}
+.insp .row.hl{background:var(--rose-soft);border-radius:8px}
+/* мини-схема стола: клик по стулу — убрать, по пунктирному ＋ — поставить именно сюда */
+.dg{display:flex;flex-direction:column;align-items:center;padding:6px 10px 2px}
+.dg svg{width:100%;max-width:196px;height:auto}
+.dg-table{fill:var(--rose-soft);stroke:var(--line);stroke-width:1.5}
+.dg-chair{fill:#fff;stroke:var(--line);stroke-width:1;transition:fill .12s,stroke .12s}
+.dg-chair.hl{fill:var(--rose);stroke:var(--rose-deep)}
+.dg-edge{stroke:var(--rose);stroke-width:3.5;stroke-linecap:round;fill:none}
+.dg-gap{fill:#fff;stroke:var(--rose);stroke-dasharray:2.5 2.5;opacity:.9}
+.dg-click{cursor:pointer;transition:fill .1s,stroke .1s}
+.dg-click:hover{fill:var(--rose);stroke:var(--rose-deep)}
+.dg-gap.dg-click:hover{fill:var(--rose-soft)}
+.dg-cap{text-align:center;font-size:11.5px;color:var(--ink2);margin:2px 0 4px;min-height:15px}
+.dg-cap.hl{color:var(--rose-deep);font-weight:700}
 .insp .align{display:none;align-items:center;justify-content:center;gap:8px;width:calc(100% - 24px);margin:6px 12px 0;border:1px dashed var(--gold-line);background:var(--gold-soft);color:var(--gold);border-radius:10px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
 .insp .align svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2}
 .insp .acts{display:flex;gap:8px;padding:8px 12px 12px}
@@ -99,7 +114,8 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
   <div id="i-tablectl">
     <div class="sect">Поворот</div>
     <div class="rotrow"><button data-rot="-1">⟲ −45°</button><button data-rot="1">+45° ⟳</button></div>
-    <div class="sect">Стулья (клик по ＋ на плане — добавить)</div>
+    <div id="i-diagram" class="dg"></div>
+    <div class="sect" id="i-seatlabel">Стулья (клик по схеме — стул/место)</div>
     <div id="i-rows"></div>
     <button class="align" id="i-align"><svg viewBox="0 0 24 24"><path d="M8 7h8M8 12h8M8 17h8"/></svg>Выровнять · равные отступы</button>
   </div>
@@ -146,7 +162,7 @@ const rectTotal=t=>['seatsA','seatsB','seatsE1','seatsE2'].reduce((s,k)=>s+Math.
 const seatCount=t=> t.shape==='rect'?rectTotal(t):t.seats;
 function localToWorld(t,lx,lz){ const c=Math.cos(t.rot),s=Math.sin(t.rot); return [t.x+c*lx+s*lz, t.z-s*lx+c*lz]; }
 function chairSlots(t){ const out=[];
-  if(t.shape==='round'){ const n=t.seats; for(let i=0;i<n;i++){ const a=i/Math.max(n,1)*Math.PI*2-Math.PI/2; out.push({x:t.x+Math.cos(a)*(t.R+CH),z:t.z+Math.sin(a)*(t.R+CH),gapped:false,side:'seats',slot:i,rot:t.rot+a+Math.PI/2}); } return out; }
+  if(t.shape==='round'){ const n=t.seats; for(let i=0;i<n;i++){ const a=i/Math.max(n,1)*Math.PI*2-Math.PI/2+t.rot; out.push({x:t.x+Math.cos(a)*(t.R+CH),z:t.z+Math.sin(a)*(t.R+CH),gapped:false,side:'seats',slot:i,rot:a+Math.PI/2}); } return out; }
   const long=(k,sg)=>{ const n=t[k]||0; for(let i=0;i<n;i++){ const gp=(t.gaps[k]||[]).indexOf(i)>=0; const [x,z]=localToWorld(t,-t.hl+(i+0.5)/n*(2*t.hl), sg*(t.hw+CH)); out.push({x,z,gapped:gp,side:k,slot:i,rot:t.rot+(sg>0?Math.PI/2:-Math.PI/2)}); } };
   const end=(k,sg)=>{ const n=t[k]||0; for(let i=0;i<n;i++){ const gp=(t.gaps[k]||[]).indexOf(i)>=0; const [x,z]=localToWorld(t,sg*(t.hl+CH), -t.hw+(i+0.5)/n*(2*t.hw)); out.push({x,z,gapped:gp,side:k,slot:i,rot:t.rot}); } };
   long('seatsA',1); long('seatsB',-1); end('seatsE1',1); end('seatsE2',-1); return out; }
@@ -223,11 +239,15 @@ function render(){
       else { cg.appendChild(el('rect',{x:-20,y:-22,width:40,height:32,rx:6,fill:'#F7E1EC',stroke:'#E3AEC9','stroke-width':3})); cg.appendChild(el('rect',{x:-20,y:6,width:40,height:12,rx:4,fill:'#EBC7DA'})); }
       g.appendChild(cg); });
     floor.appendChild(g); });
-  // подписи столов — верхний слой
-  tables.forEach(t=>{ const txt=(dy,s,o)=>{ const e=el('text',Object.assign({x:t.x,y:t.z+dy,'text-anchor':'middle','pointer-events':'none',stroke:'#fff','stroke-width':7,'paint-order':'stroke'},o)); e.textContent=s; floor.appendChild(e); };
-    txt(-18, tname(t), {'font-family':'Cormorant Garamond, Georgia, serif','font-size':28,fill:'#B47C97','font-weight':600});
-    txt(8, tsize(t), {'font-size':26,fill:'#9D174D','font-weight':800});
-    txt(34, seatCount(t)+' мест', {'font-size':23,fill:'#B06E92','font-weight':600}); });
+  // подписи столов — верхний слой; при повороте/узкой стороне не вылезают за столешницу (авто-уменьшение)
+  tables.forEach(t=>{ const grp=el('g',{}); const txt=(dy,s,o)=>{ const e=el('text',Object.assign({x:t.x,y:t.z+dy,'text-anchor':'middle','pointer-events':'none',stroke:'#fff','stroke-width':7,'paint-order':'stroke'},o)); e.textContent=s; grp.appendChild(e); return e; };
+    const eName=txt(-18, tname(t), {'font-family':'Cormorant Garamond, Georgia, serif','font-size':28,fill:'#B47C97','font-weight':600});
+    const eSize=txt(8, tsize(t), {'font-size':26,fill:'#9D174D','font-weight':800});
+    txt(34, seatCount(t)+' мест', {'font-size':23,fill:'#B06E92','font-weight':600});
+    floor.appendChild(grp);
+    const avail=(halfExt(t).hx*2)*0.86;
+    let maxLen=0; try{ maxLen=Math.max(eName.getComputedTextLength(),eSize.getComputedTextLength()); }catch(_){}
+    if(maxLen>avail && maxLen>0){ const s=Math.max(0.42,avail/maxLen); grp.setAttribute('transform',`translate(${t.x},${t.z}) scale(${s}) translate(${-t.x},${-t.z})`); } });
   // объединённые столы — сумма гостей
   clusters().forEach(cl=>{ if(cl.length<2) return; const total=cl.reduce((s,t)=>s+seatCount(t),0); let minZ=1e9,minX=1e9,maxX=-1e9; cl.forEach(t=>{const e=halfExt(t); minZ=Math.min(minZ,t.z-e.hy); minX=Math.min(minX,t.x);maxX=Math.max(maxX,t.x);});
     const g=el('g',{transform:`translate(${(minX+maxX)/2},${minZ-56})`}); const w=270;
@@ -247,45 +267,115 @@ function render(){
 function clusters(){ const p=tables.map((_,i)=>i); const find=i=>p[i]===i?i:(p[i]=find(p[i]));
   for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){ const a=tables[i],b=tables[j],ea=halfExt(a),eb=halfExt(b); const ox=ea.hx+eb.hx-Math.abs(a.x-b.x),oy=ea.hy+eb.hy-Math.abs(a.z-b.z); if(ox>-12&&oy>-12) p[find(i)]=find(j); }
   const m={}; tables.forEach((t,i)=>{const r=find(i);(m[r]=m[r]||[]).push(t);}); return Object.values(m); }
-// ---- коллизия + привязка ----
-function resolve(t){ for(let k=0;k<6;k++){ let moved=false; tables.forEach(o=>{ if(o===t)return; const et=halfExt(t),eo=halfExt(o),dx=t.x-o.x,dz=t.z-o.z; const ox=et.hx+eo.hx-Math.abs(dx),oz=et.hy+eo.hy-Math.abs(dz); if(ox>0&&oz>0){ if(Math.abs(dx)>=Math.abs(dz)) t.x+=(dx>=0?ox:-ox); else t.z+=(dz>=0?oz:-oz); moved=true; } }); if(!moved)break; } }
-function snap(t){ guides=[]; const TH=12; tables.forEach(o=>{ if(o===t)return; const et=halfExt(t),eo=halfExt(o); if(Math.abs(t.z-o.z)>et.hy+eo.hy-8 && Math.abs(t.x-o.x)<TH){t.x=o.x;guides.push({axis:'x',pos:o.x});} if(Math.abs(t.x-o.x)>et.hx+eo.hx-8 && Math.abs(t.z-o.z)<TH){t.z=o.z;guides.push({axis:'y',pos:o.z});} }); }
+// ---- коллизия (с учётом стульев!) + привязка по краю/центру/торцу ----
+// полный «отпечаток» стола — столешница ПЛЮС реально стоящие стулья (не даём столам мешать чужим стульям)
+function fullBox(t){ const e=halfExt(t); let minX=t.x-e.hx,maxX=t.x+e.hx,minZ=t.z-e.hy,maxZ=t.z+e.hy;
+  chairSlots(t).forEach(c=>{ if(c.gapped)return; minX=Math.min(minX,c.x-18);maxX=Math.max(maxX,c.x+18);minZ=Math.min(minZ,c.z-18);maxZ=Math.max(maxZ,c.z+18); });
+  return {minX,maxX,minZ,maxZ}; }
+function resolve(t){ for(let k=0;k<6;k++){ let moved=false; tables.forEach(o=>{ if(o===t)return;
+  const bt=fullBox(t),bo=fullBox(o);
+  const ox=Math.min(bt.maxX,bo.maxX)-Math.max(bt.minX,bo.minX), oz=Math.min(bt.maxZ,bo.maxZ)-Math.max(bt.minZ,bo.minZ);
+  if(ox>0&&oz>0){ const dx=t.x-o.x,dz=t.z-o.z; if(Math.abs(dx)>=Math.abs(dz)) t.x+=(dx>=0?ox:-ox); else t.z+=(dz>=0?oz:-oz); moved=true; } }); if(!moved)break; } }
+// привязка (умные направляющие): центр, левый/правый край, торец-к-стороне (буквой Г) — по СТОЛЕШНИЦЕ,
+// финальный зазор от стульев соседа потом гарантирует resolve()
+function snap(t){ guides=[]; const TH=14; const et=halfExt(t); const GAP=300;
+  tables.forEach(o=>{ if(o===t)return; const eo=halfExt(o);
+    if(Math.abs(t.z-o.z) < et.hy+eo.hy+GAP){
+      const cands=[o.x, o.x-eo.hx+et.hx, o.x+eo.hx-et.hx, o.x+eo.hx+et.hx, o.x-eo.hx-et.hx];
+      let best=null,bd=TH; cands.forEach(c=>{ const d=Math.abs(t.x-c); if(d<bd){bd=d;best=c;} });
+      if(best!==null){ t.x=best; guides.push({axis:'x',pos:best}); } }
+    if(Math.abs(t.x-o.x) < et.hx+eo.hx+GAP){
+      const cands=[o.z, o.z-eo.hy+et.hy, o.z+eo.hy-et.hy, o.z+eo.hy+et.hy, o.z-eo.hy-et.hy];
+      let best=null,bd=TH; cands.forEach(c=>{ const d=Math.abs(t.z-c); if(d<bd){bd=d;best=c;} });
+      if(best!==null){ t.z=best; guides.push({axis:'y',pos:best}); } }
+  }); }
 // ---- события ----
 function svgPt(e){ const r=floor.getBoundingClientRect(); return {x:VB.x+(e.clientX-r.left)/r.width*VB.w, z:VB.z+(e.clientY-r.top)/r.height*VB.h}; }
-let drag=null;
-floor.addEventListener('pointerdown',e=>{ if(locked) return;
-  const chair=e.target.closest('[data-chair]');
-  if(chair){ const t=tables[+chair.dataset.id], key=chair.dataset.side, slot=+chair.dataset.slot;
-    if(key==='seats'){ t.seats=Math.max(0,t.seats-1); } else { const arr=t.gaps[key]; const j=arr.indexOf(slot); j>=0?arr.splice(j,1):arr.push(slot); }
-    render(); save(); return; }
-  const og=e.target.closest('g[data-obj]'); if(og){ const o=objs.find(x=>x.id==og.dataset.obj); selObj=o.id; selected=null; const p=svgPt(e); drag={o,dx:o.x-p.x,dz:o.z-p.z}; floor.setPointerCapture(e.pointerId); render(); return; }
-  const g=e.target.closest('g[data-id]'); if(!g){ if(selected||selObj){selected=null;selObj=null;render();} return; }
-  const t=tables[+g.dataset.id]; selected=t; selObj=null; const p=svgPt(e); drag={t,dx:t.x-p.x,dz:t.z-p.z}; floor.setPointerCapture(e.pointerId); render();
+let drag=null, pan=null;
+floor.addEventListener('pointerdown',e=>{
+  if(!locked){
+    const chair=e.target.closest('[data-chair]');
+    if(chair){ const t=tables[+chair.dataset.id], key=chair.dataset.side, slot=+chair.dataset.slot;
+      if(key==='seats'){ t.seats=Math.max(0,t.seats-1); } else { const arr=t.gaps[key]; const j=arr.indexOf(slot); j>=0?arr.splice(j,1):arr.push(slot); }
+      render(); save(); return; }
+    const og=e.target.closest('g[data-obj]'); if(og){ const o=objs.find(x=>x.id==og.dataset.obj); selObj=o.id; selected=null; const p=svgPt(e); drag={o,dx:o.x-p.x,dz:o.z-p.z}; floor.setPointerCapture(e.pointerId); render(); return; }
+    const g=e.target.closest('g[data-id]'); if(g){ const t=tables[+g.dataset.id]; selected=t; selObj=null; const p=svgPt(e); drag={t,dx:t.x-p.x,dz:t.z-p.z}; floor.setPointerCapture(e.pointerId); render(); return; }
+  }
+  // мимо всего — панорамирование поля (работает и при locked)
+  if(selected||selObj){selected=null;selObj=null;render();}
+  const rect=floor.getBoundingClientRect();
+  pan={sx:e.clientX,sy:e.clientY,vbx:VB.x,vbz:VB.z,pxPerCm:rect.width/VB.w};
+  floor.setPointerCapture(e.pointerId); floor.classList.add('panning');
 });
-floor.addEventListener('pointermove',e=>{ if(!drag) return; const p=svgPt(e);
-  if(drag.o){ drag.o.x=p.x+drag.dx; drag.o.z=p.z+drag.dz; } else { drag.t.x=p.x+drag.dx; drag.t.z=p.z+drag.dz; resolve(drag.t); snap(drag.t); } render(); });
-floor.addEventListener('pointerup',()=>{ if(drag){ drag=null; guides=[]; render(); save(); } });
+floor.addEventListener('pointermove',e=>{
+  if(pan){ VB.x=pan.vbx-(e.clientX-pan.sx)/pan.pxPerCm; VB.z=pan.vbz-(e.clientY-pan.sy)/pan.pxPerCm; render(); return; }
+  if(!drag) return; const p=svgPt(e);
+  if(drag.o){ drag.o.x=p.x+drag.dx; drag.o.z=p.z+drag.dz; } else { drag.t.x=p.x+drag.dx; drag.t.z=p.z+drag.dz; snap(drag.t); resolve(drag.t); } render(); });
+floor.addEventListener('pointerup',()=>{ if(pan){ pan=null; floor.classList.remove('panning'); } if(drag){ drag=null; guides=[]; render(); save(); } });
 // зум колесом
 floor.addEventListener('wheel',e=>{ e.preventDefault(); const p=svgPt(e), f=e.deltaY>0?1.12:0.9; const nw=Math.max(500,Math.min(4000,VB.w*f)), nh=nw*VB.h/VB.w; VB.x=p.x-(p.x-VB.x)*nw/VB.w; VB.z=p.z-(p.z-VB.z)*nh/VB.h; VB.w=nw; VB.h=nh; render(); },{passive:false});
 
 // ---- инспектор ----
 const capVal=(t,k)=>Math.max(0,(t[k]||0)-(t.gaps[k]||[]).length);
 const hasGaps=t=> t.shape==='rect' && ['seatsA','seatsB','seatsE1','seatsE2'].some(k=>(t.gaps[k]||[]).length);
+// ---- мини-схема стола (вид сверху) в инспекторе: клик по стулу — убрать, по пунктирному ＋ — поставить именно сюда ----
+const SIDE_NAMES={seatsA:'Сторона 1',seatsB:'Сторона 2',seatsE1:'Торец 1',seatsE2:'Торец 2',seats:'Гости вокруг'};
+function dgChairs(n,x0,y0,W,H,side,hl,gaps,key){ let s=''; gaps=gaps||[];
+  for(let i=0;i<n;i++){ let x,y,w,h; const gapped=gaps.indexOf(i)>=0;
+    if(side==='bottom'){ w=13;h=8; x=x0+(i+0.5)/n*W-w/2; y=y0+H+5; }
+    else if(side==='top'){ w=13;h=8; x=x0+(i+0.5)/n*W-w/2; y=y0-5-h; }
+    else if(side==='right'){ w=8;h=13; x=x0+W+5; y=y0+(i+0.5)/n*H-h/2; }
+    else { w=8;h=13; x=x0-5-w; y=y0+(i+0.5)/n*H-h/2; }
+    const cls=gapped?'dg-chair dg-gap dg-click':('dg-chair dg-click'+(hl?' hl':''));
+    s+=`<rect class="${cls}" data-side="${key}" data-slot="${i}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w}" height="${h}" rx="2.5"/>`; }
+  return s; }
+function renderDiagram(t,hl){ const el=document.getElementById('i-diagram'); if(!el||!t) return;
+  const cap=`<div class="dg-cap${hl?' hl':''}">${hl?SIDE_NAMES[hl]:(t.shape==='rect'?'Банкетный стол — наведите на строку':'Круглый стол')}</div>`;
+  if(t.shape!=='rect'){ const n=Math.max(t.seats||0,0),cx=90,cy=54,R=32; let ch='';
+    for(let i=0;i<n;i++){ const a=i/Math.max(n,1)*Math.PI*2-Math.PI/2, x=cx+Math.cos(a)*(R+12), y=cy+Math.sin(a)*(R+12);
+      ch+=`<circle class="dg-chair dg-click${hl==='seats'?' hl':''}" data-side="seats" data-slot="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5"/>`; }
+    const ring=hl==='seats'?`<circle class="dg-edge" cx="${cx}" cy="${cy}" r="${R}" fill="none"/>`:'';
+    el.innerHTML=`<svg viewBox="0 0 180 108"><circle class="dg-table" cx="${cx}" cy="${cy}" r="${R}"/>${ring}${ch}</svg>`+cap; return; }
+  const a=t.seatsA||0, b=t.seatsB||0, e1=t.seatsE1||0, e2=t.seatsE2||0;
+  const x0=40,y0=30,W=100,H=48,o=6;
+  const edge = hl==='seatsA'?`<line class="dg-edge" x1="${x0}" y1="${y0+H+o}" x2="${x0+W}" y2="${y0+H+o}"/>`
+    : hl==='seatsB'?`<line class="dg-edge" x1="${x0}" y1="${y0-o}" x2="${x0+W}" y2="${y0-o}"/>`
+    : hl==='seatsE1'?`<line class="dg-edge" x1="${x0+W+o}" y1="${y0}" x2="${x0+W+o}" y2="${y0+H}"/>`
+    : hl==='seatsE2'?`<line class="dg-edge" x1="${x0-o}" y1="${y0}" x2="${x0-o}" y2="${y0+H}"/>`:'';
+  const G=t.gaps;
+  el.innerHTML=`<svg viewBox="0 0 180 108"><rect class="dg-table" x="${x0}" y="${y0}" width="${W}" height="${H}" rx="5"/>${edge}`
+    +dgChairs(a,x0,y0,W,H,'bottom',hl==='seatsA',G.seatsA,'seatsA')+dgChairs(b,x0,y0,W,H,'top',hl==='seatsB',G.seatsB,'seatsB')
+    +dgChairs(e1,x0,y0,W,H,'right',hl==='seatsE1',G.seatsE1,'seatsE1')+dgChairs(e2,x0,y0,W,H,'left',hl==='seatsE2',G.seatsE2,'seatsE2')
+    +`</svg>`+cap;
+}
 function renderInsp(){ const box=document.getElementById('insp'), t=selected;
   if(!t||locked){ box.style.display='none'; return; } box.style.display='block';
   document.getElementById('i-name').value=tname(t);
   document.getElementById('i-sub').textContent=tsize(t)+' · '+seatCount(t)+' мест';
-  const row=(l,k,v)=>`<div class="row"><span>${l}</span><button data-cap="${k}" data-d="-1">−</button><b>${v}</b><button data-cap="${k}" data-d="1">+</button></div>`;
+  document.getElementById('i-seatlabel').textContent = t.shape==='rect' ? 'Стулья по сторонам' : 'Гости за столом';
+  const row=(l,k,v)=>`<div class="row" data-key="${k}"><span>${l}</span><button data-cap="${k}" data-d="-1">−</button><b>${v}</b><button data-cap="${k}" data-d="1">+</button></div>`;
   document.getElementById('i-rows').innerHTML = t.shape==='round'
     ? row('Гостей','seats',t.seats)
     : row('Сторона 1','seatsA',capVal(t,'seatsA'))+row('Сторона 2','seatsB',capVal(t,'seatsB'))+row('Торец 1','seatsE1',capVal(t,'seatsE1'))+row('Торец 2','seatsE2',capVal(t,'seatsE2'));
   document.getElementById('i-align').style.display=hasGaps(t)?'flex':'none';
+  renderDiagram(t,null);
 }
-document.getElementById('i-rows').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b||!selected)return; const t=selected,k=b.dataset.cap,d=+b.dataset.d;
+const iRows=document.getElementById('i-rows');
+iRows.addEventListener('pointerover',e=>{ const r=e.target.closest('[data-key]'); if(selected) renderDiagram(selected, r?r.dataset.key:null); r&&r.classList.add('hl'); });
+iRows.addEventListener('pointerout',e=>{ const r=e.target.closest('[data-key]'); r&&r.classList.remove('hl'); if(!e.relatedTarget||!e.relatedTarget.closest('#i-rows')){ if(selected) renderDiagram(selected,null); } });
+iRows.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b||!selected)return; const t=selected,k=b.dataset.cap,d=+b.dataset.d;
   if(k==='seats'){ t.seats=Math.max(2,Math.min(16,t.seats+d)); }
   else if(d>0){ if(t.gaps[k].length){t.gaps[k].sort((a,b)=>a-b);t.gaps[k].pop();} else t[k]=Math.min(k.startsWith('seatsE')?2:12,(t[k]||0)+1); }
   else { const cap=t[k]||0; for(let i=cap-1;i>=0;i--){ if(t.gaps[k].indexOf(i)<0){t.gaps[k].push(i);break;} } }
-  render(); save(); });
+  resolve(t); render(); save(); });
+// клик прямо по мини-схеме: по стулу — убрать (дырка), по пустому пунктирному ＋ — поставить именно сюда
+document.getElementById('i-diagram').addEventListener('click',e=>{
+  const r=e.target.closest('[data-side]'); const t=selected; if(!r||!t) return;
+  const key=r.dataset.side, slot=+r.dataset.slot;
+  if(key==='seats'){ t.seats=Math.max(0,t.seats-1); }
+  else { const g=t.gaps[key]=(t.gaps[key]||[]); const j=g.indexOf(slot); j>=0?g.splice(j,1):g.push(slot); }
+  resolve(t); render(); save();
+});
 document.querySelectorAll('.rotrow button').forEach(b=>b.addEventListener('click',()=>{ if(!selected)return; selected.rot+=(+b.dataset.rot)*Math.PI/4; resolve(selected); render(); save(); }));
 document.getElementById('i-name').addEventListener('change',e=>{ if(selected){ selected.name=e.target.value.trim(); render(); save(); } });
 document.getElementById('i-align').addEventListener('click',()=>{ const t=selected; if(!t)return; ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ t[k]-=t.gaps[k].length; t.gaps[k]=[]; }); render(); save(); });
@@ -311,6 +401,7 @@ function applyPreset(v){
   else if(v==='head'){ tables=[R(0,-250,0,{A:6,B:0},'Президиум')]; for(let c=0;c<3;c++)for(let r=0;r<2;r++) tables.push(O((c-1)*330,60+r*330,8)); }
   else if(v==='grid'){ tables=[]; for(let r=0;r<3;r++)for(let c=0;c<3;c++) tables.push(O((c-1)*330,(r-1)*330,8)); }
   else if(v==='rows'){ tables=[]; for(let i=0;i<3;i++) tables.push(R((i-1)*270,0,R90,{A:5,B:5})); }
+  for(let pass=0;pass<3;pass++) tables.forEach(resolve); // подстраховка: стулья пресета нигде не пересекаются
   selected=null; render(); save(); fitView();
 }
 function fitView(){ if(!tables.length && !objs.length){ VB={x:-650,z:-450,w:1300,h:900}; render(); return; }
