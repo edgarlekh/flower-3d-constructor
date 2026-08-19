@@ -446,12 +446,20 @@ function tableParts(t){ const parts=[tableBodyPart(t)];
   return parts; }
 function boxOverlap(a,b){ return Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX)>0 && Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ)>0; }
 function partsOverlap(pa,pb){ for(const a of pa) for(const b of pb){ if(boxOverlap(a,b)) return true; } return false; }
-function overlapsOther(t){ const pa=tableParts(t); return tables.some(o=>o!==t && partsOverlap(pa,tableParts(o))); }
+// Объекты зала (бар/сцена/танцпол/арка) — статичные препятствия того же ранга, что и другие
+// столы: стол/стул не должен вставать поверх них (ТЗ 3.2 п.4 и критерий приёмки №21).
+function objBodyPart(o){ return {minX:o.x-o.w/2,maxX:o.x+o.w/2,minZ:o.z-o.h/2,maxZ:o.z+o.h/2}; }
+function overlapsOther(t){ const pa=tableParts(t);
+  if(tables.some(o=>o!==t && partsOverlap(pa,tableParts(o)))) return true;
+  return objs.some(o=>partsOverlap(pa,[objBodyPart(o)])); }
 // Полное разведение (столешница+стулья) — используется там, где раздвигание оправдано и
 // ожидаемо (поворот, добавление/дублирование стола, готовые схемы), но НЕ при обычном
 // перетаскивании — там раздвигание ощущается как «стол сам уехал», см. resolveBodies().
-function resolve(t){ for(let k=0;k<6;k++){ let moved=false; tables.forEach(o=>{ if(o===t)return;
-  const pa=tableParts(t), pb=tableParts(o); let ox=0,oz=0,found=false;
+function resolve(t){ for(let k=0;k<6;k++){ let moved=false;
+  const obstacles=tables.filter(o=>o!==t).map(o=>({x:o.x,z:o.z,parts:tableParts(o)}))
+    .concat(objs.map(o=>({x:o.x,z:o.z,parts:[objBodyPart(o)]})));
+  obstacles.forEach(o=>{
+  const pa=tableParts(t), pb=o.parts; let ox=0,oz=0,found=false;
   pa.forEach(a=>pb.forEach(b=>{ const dx=Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX), dz=Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ);
     if(dx>0&&dz>0){ found=true; if(dx>ox)ox=dx; if(dz>oz)oz=dz; } }));
   if(found){ const dx=t.x-o.x,dz=t.z-o.z; if(Math.abs(dx)>=Math.abs(dz)) t.x+=(dx>=0?ox:-ox); else t.z+=(dz>=0?oz:-oz); moved=true; } }); if(!moved)break; } }
@@ -459,10 +467,19 @@ function resolve(t){ for(let k=0;k<6;k++){ let moved=false; tables.forEach(o=>{ 
 // (два стола не могут занимать одно место), но которая не мешает столам с конфликтующими
 // стульями просто соприкоснуться при перетаскивании — конфликт стульев решает диалог
 // стыковки (findChairConflicts + showDockDialog), а не молчаливое раздвигание.
-function resolveBodies(t){ for(let k=0;k<6;k++){ let moved=false; tables.forEach(o=>{ if(o===t)return;
-  const a=tableBodyPart(t), b=tableBodyPart(o);
+function resolveBodies(t){ for(let k=0;k<6;k++){ let moved=false;
+  const obstacles=tables.filter(o=>o!==t).map(o=>({x:o.x,z:o.z,body:tableBodyPart(o)}))
+    .concat(objs.map(o=>({x:o.x,z:o.z,body:objBodyPart(o)})));
+  obstacles.forEach(o=>{
+  const a=tableBodyPart(t), b=o.body;
   const dx=Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX), dz=Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ);
   if(dx>0&&dz>0){ const ddx=t.x-o.x,ddz=t.z-o.z; if(Math.abs(ddx)>=Math.abs(ddz)) t.x+=(ddx>=0?dx:-dx); else t.z+=(ddz>=0?dz:-dz); moved=true; } }); if(!moved)break; } }
+// Симметрично: перетаскиваемый объект зала тоже не должен вставать поверх стола
+// (по столешнице — без учёта стульев, тот же уровень точности, что и у resolveBodies).
+function resolveObjBody(o){ for(let k=0;k<6;k++){ let moved=false; tables.forEach(t=>{
+  const a=objBodyPart(o), b=tableBodyPart(t);
+  const dx=Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX), dz=Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ);
+  if(dx>0&&dz>0){ const ddx=o.x-t.x,ddz=o.z-t.z; if(Math.abs(ddx)>=Math.abs(ddz)) o.x+=(ddx>=0?dx:-dx); else o.z+=(ddz>=0?dz:-dz); moved=true; } }); if(!moved)break; } }
 const dispSide=s=> s==='table' ? 'столешница' : (SIDE_NAMES[s]||s);
 // Конфликты стульев после перетаскивания: чужие/свои стулья либо друг с другом, либо со
 // столешницей соседа. side:'table' — конфликт со столешницей целиком (не с конкретным местом).
@@ -615,7 +632,7 @@ floor.addEventListener('pointermove',e=>{
   // Группа двигается целиком без снапа/раздвигания — она уже согласована сама с собой,
   // а взаимодействие с ДРУГИМИ столами при перетаскивании группы — за рамками этого этапа
   // (см. план, Этап 5): итоговое положение всё равно честно подсвечивается Этапом 3.
-  if(drag.o){ drag.o.x=p.x+drag.dx; drag.o.z=p.z+drag.dz; }
+  if(drag.o){ drag.o.x=p.x+drag.dx; drag.o.z=p.z+drag.dz; resolveObjBody(drag.o); }
   else if(drag.groupDrag){ const newAx=p.x+drag.dx, newAz=p.z+drag.dz; const dx=newAx-drag.anchorX0, dz=newAz-drag.anchorZ0;
     drag.orig.forEach(o=>{ o.t.x=o.x0+dx; o.t.z=o.z0+dz; }); }
   else { drag.t.x=p.x+drag.dx; drag.t.z=p.z+drag.dz; snap(drag.t); resolveBodies(drag.t); } render(); });
