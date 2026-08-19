@@ -284,7 +284,10 @@
     place('seatsA', t.userData.seatsA||0, 'long'); place('seatsB', t.userData.seatsB||0, 'long');
     place('seatsE1', t.userData.seatsE1||0, 'end'); place('seatsE2', t.userData.seatsE2||0, 'end');
   }
-  function fillSlot(t, key, slot){ const g=t.userData.gaps&&t.userData.gaps[key]; if(!g) return; const j=g.indexOf(slot); if(j>=0){ g.splice(j,1); t.userData.seats=rectTotal(t); buildSettings(t); } }
+  function fillSlot(t, key, slot){ const g=t.userData.gaps&&t.userData.gaps[key]; if(!g) return; const j=g.indexOf(slot); if(j<0) return;
+    const occupied=(t.userData[key]||0)-g.length;
+    if(!window.PlanGeometry.canAddLinearSeat(rectSideLen(t,key), occupied)) return; // физический лимит (напр. у старых сохранений)
+    g.splice(j,1); t.userData.seats=rectTotal(t); buildSettings(t); }
 
   // прямоугольная рамка выделения (для банкетных столов)
   const selRect = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3()]),
@@ -575,17 +578,22 @@
     const seats=Math.max(t.userData.seats,1); return Math.round(2*Math.PI*(tR(t)+22)/seats - 45); }
   // Реальное число стульев = вместимость сторон минус точечно убранные (дырки).
   function rectTotal(t){ const G=t.userData.gaps||{}; const c=k=>Math.max(0,(t.userData[k]||0)-((G[k]||[]).length)); return c('seatsA')+c('seatsB')+c('seatsE1')+c('seatsE2'); }
+  // Физический лимит места на стороне — как в plan.html (assets/js/plan-geometry.js):
+  // длина стороны / (ширина стула + мин. зазор), а не произвольная константа.
+  const rectSideLen=(t,key)=> (key==='seatsE1'||key==='seatsE2') ? (t.userData.hw||RECT_HW)*2 : (t.userData.hl||RECT_HL)*2;
   // Задать вместимость стороны (счётчик). Дырки за пределами новой вместимости убираем.
-  function setRectSeats(t, key, n){ const cap=key.startsWith('seatsE')?2:12; t.userData[key]=Math.max(0,Math.min(cap,n));
+  function setRectSeats(t, key, n){ const cap=window.PlanGeometry.getMaxLinearSeats(rectSideLen(t,key)); t.userData[key]=Math.max(0,Math.min(cap,n));
     if(t.userData.gaps&&t.userData.gaps[key]) t.userData.gaps[key]=t.userData.gaps[key].filter(i=>i<t.userData[key]);
     t.userData.seats=rectTotal(t); buildSettings(t); }
   function setRectSides(t, a, b){ t.userData.seatsA=Math.max(0,a); t.userData.seatsB=Math.max(0,b); t.userData.seats=rectTotal(t); buildSettings(t); }
   // Точечно убрать конкретный стул (оставить дырку, соседей не двигать).
   function gapChair(t, key, slot){ if(key==='seats'){ t.userData.seats=Math.max(0,t.userData.seats-1); buildSettings(t); return; }
     const g=t.userData.gaps[key]=(t.userData.gaps[key]||[]); if(g.indexOf(slot)<0) g.push(slot); t.userData.seats=rectTotal(t); buildSettings(t); }
-  // «+» на сторону: сперва вернуть последнюю дырку, иначе нарастить вместимость.
-  function addChairSide(t, key){ if(key==='seats'){ t.userData.seats=t.userData.seats+1; buildSettings(t); return; }
-    const g=t.userData.gaps[key]=(t.userData.gaps[key]||[]); if(g.length){ g.sort((a,b)=>a-b); g.pop(); t.userData.seats=rectTotal(t); buildSettings(t); }
+  // «+» на сторону: сперва вернуть последнюю дырку, иначе нарастить вместимость (не выше физического лимита).
+  function addChairSide(t, key){ if(key==='seats'){ if(!window.PlanGeometry.canAddRoundSeat(2*(t.userData.R||TABLE_R), t.userData.seats)) return; t.userData.seats=t.userData.seats+1; buildSettings(t); return; }
+    const g=t.userData.gaps[key]=(t.userData.gaps[key]||[]), occupied=(t.userData[key]||0)-g.length;
+    if(!window.PlanGeometry.canAddLinearSeat(rectSideLen(t,key), occupied)) return;
+    if(g.length){ g.sort((a,b)=>a-b); g.pop(); t.userData.seats=rectTotal(t); buildSettings(t); }
     else setRectSeats(t, key, (t.userData[key]||0)+1); }
   // «−» на сторону: убрать последний стул дыркой (позиции остальных не трогаем).
   function removeChairSide(t, key){ if(key==='seats'){ t.userData.seats=Math.max(0,t.userData.seats-1); buildSettings(t); return; }

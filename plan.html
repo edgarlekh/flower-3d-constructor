@@ -56,6 +56,9 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
 .insp .row button:hover{border-color:var(--rose);color:var(--rose)}
 .insp .row b{min-width:14px;text-align:center;font-variant-numeric:tabular-nums}
 .insp .row.hl{background:var(--rose-soft);border-radius:8px}
+.insp .row button:disabled{opacity:.35;cursor:not-allowed}
+.insp .row button:disabled:hover{border-color:var(--line);color:var(--ink)}
+.insp .capwarn{margin:-2px 14px 6px;font-size:10.5px;line-height:1.35;color:#b6355a;font-weight:600}
 /* мини-схема стола: клик по стулу — убрать, по пунктирному ＋ — поставить именно сюда */
 .dg{display:flex;flex-direction:column;align-items:center;padding:6px 10px 2px}
 .dg svg{width:100%;max-width:196px;height:auto}
@@ -346,6 +349,12 @@ floor.addEventListener('wheel',e=>{ e.preventDefault(); const p=svgPt(e), f=e.de
 // ---- инспектор ----
 const capVal=(t,k)=>Math.max(0,(t[k]||0)-(t.gaps[k]||[]).length);
 const hasGaps=t=> t.shape==='rect' && ['seatsA','seatsB','seatsE1','seatsE2'].some(k=>(t.gaps[k]||[]).length);
+// физический лимит мест: длина стороны / (ширина стула + мин. зазор), для круглого — по хорде
+const sideLenFor=(t,k)=> (k==='seatsE1'||k==='seatsE2') ? t.hw*2 : t.hl*2;
+const physicalMax=(t,k)=> t.shape==='round' ? PG.getMaxRoundSeats(t.R*2) : PG.getMaxLinearSeats(sideLenFor(t,k));
+const capWarning=(t,k)=> t.shape==='round'
+  ? PG.getSeatCapacityWarning({shape:'round',diameter:t.R*2,occupied:t.seats})
+  : PG.getSeatCapacityWarning({shape:'rect',sideLength:sideLenFor(t,k),occupied:capVal(t,k)});
 // ---- мини-схема стола (вид сверху) в инспекторе: клик по стулу — убрать, по пунктирному ＋ — поставить именно сюда ----
 const SIDE_NAMES={seatsA:'Сторона 1',seatsB:'Сторона 2',seatsE1:'Торец 1',seatsE2:'Торец 2',seats:'Гости вокруг'};
 function dgChairs(n,x0,y0,W,H,side,hl,gaps,key){ let s=''; gaps=gaps||[];
@@ -381,7 +390,10 @@ function renderInsp(){ const box=document.getElementById('insp'), t=selected;
   document.getElementById('i-name').value=tname(t);
   document.getElementById('i-sub').textContent=tsize(t)+' · '+seatCount(t)+' мест';
   document.getElementById('i-seatlabel').textContent = t.shape==='rect' ? 'Стулья по сторонам' : 'Гости за столом';
-  const row=(l,k,v)=>`<div class="row" data-key="${k}"><span>${l}</span><button data-cap="${k}" data-d="-1">−</button><b>${v}</b><button data-cap="${k}" data-d="1">+</button></div>`;
+  const esc=s=>String(s).replace(/"/g,'&quot;');
+  const row=(l,k,v)=>{ const atMax=v>=physicalMax(t,k), warn=atMax?capWarning(t,k):null;
+    return `<div class="row" data-key="${k}"><span>${l}</span><button data-cap="${k}" data-d="-1">−</button><b>${v}</b><button data-cap="${k}" data-d="1"${atMax?` disabled title="${esc(warn)}"`:''}>+</button></div>`
+      + (warn?`<div class="capwarn">${esc(warn)}</div>`:''); };
   document.getElementById('i-rows').innerHTML = t.shape==='round'
     ? row('Гостей','seats',t.seats)
     : row('Сторона 1','seatsA',capVal(t,'seatsA'))+row('Сторона 2','seatsB',capVal(t,'seatsB'))+row('Торец 1','seatsE1',capVal(t,'seatsE1'))+row('Торец 2','seatsE2',capVal(t,'seatsE2'));
@@ -392,9 +404,10 @@ const iRows=document.getElementById('i-rows');
 iRows.addEventListener('pointerover',e=>{ const r=e.target.closest('[data-key]'); if(selected) renderDiagram(selected, r?r.dataset.key:null); r&&r.classList.add('hl'); });
 iRows.addEventListener('pointerout',e=>{ const r=e.target.closest('[data-key]'); r&&r.classList.remove('hl'); if(!e.relatedTarget||!e.relatedTarget.closest('#i-rows')){ if(selected) renderDiagram(selected,null); } });
 iRows.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b||!selected)return; const t=selected,k=b.dataset.cap,d=+b.dataset.d;
-  if(k==='seats'){ if(d>0){ const prev=t.seats; t.seats=Math.min(16,t.seats+d); if(overlapsOther(t)) t.seats=prev; } else t.seats=Math.max(2,t.seats+d); }
-  else if(d>0){ if(t.gaps[k].length){ t.gaps[k].sort((a,b)=>a-b); const slot=t.gaps[k].pop(); if(overlapsOther(t)) t.gaps[k].push(slot); }
-    else { const prev=t[k]||0; t[k]=Math.min(k.startsWith('seatsE')?2:12,prev+1); if(overlapsOther(t)) t[k]=prev; } }
+  if(k==='seats'){ if(d>0){ if(!PG.canAddRoundSeat(t.R*2,t.seats)) return; const prev=t.seats; t.seats=t.seats+d; if(overlapsOther(t)) t.seats=prev; } else t.seats=Math.max(2,t.seats+d); }
+  else if(d>0){ if(capVal(t,k)>=physicalMax(t,k)) return; // физический лимит — кнопка и так должна быть disabled, это подстраховка
+    if(t.gaps[k].length){ t.gaps[k].sort((a,b)=>a-b); const slot=t.gaps[k].pop(); if(overlapsOther(t)) t.gaps[k].push(slot); }
+    else { const prev=t[k]||0; t[k]=prev+1; if(overlapsOther(t)) t[k]=prev; } }
   else { const cap=t[k]||0; for(let i=cap-1;i>=0;i--){ if(t.gaps[k].indexOf(i)<0){t.gaps[k].push(i);break;} } }
   render(); save(); });
 // клик прямо по мини-схеме: по стулу — убрать (дырка), по пустому пунктирному ＋ — поставить именно сюда
@@ -404,7 +417,7 @@ document.getElementById('i-diagram').addEventListener('click',e=>{
   const key=r.dataset.side, slot=+r.dataset.slot;
   if(key==='seats'){ t.seats=Math.max(0,t.seats-1); }
   else { const g=t.gaps[key]=(t.gaps[key]||[]); const j=g.indexOf(slot);
-    if(j>=0){ g.splice(j,1); if(overlapsOther(t)) g.push(slot); } else g.push(slot); }
+    if(j>=0){ if(capVal(t,key)>=physicalMax(t,key)) return; g.splice(j,1); if(overlapsOther(t)) g.push(slot); } else g.push(slot); }
   render(); save();
 });
 document.querySelectorAll('.rotrow button').forEach(b=>b.addEventListener('click',()=>{ if(!selected)return; selected.rot+=(+b.dataset.rot)*Math.PI/4; resolve(selected); render(); save(); }));
