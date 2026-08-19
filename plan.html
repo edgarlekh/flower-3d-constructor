@@ -192,6 +192,14 @@ function chairSlots(t){ const out=[];
   const long=(k,sg)=>{ const n=t[k]||0; for(let i=0;i<n;i++){ const gp=(t.gaps[k]||[]).indexOf(i)>=0; const [x,z]=localToWorld(t,-t.hl+(i+0.5)/n*(2*t.hl), sg*(t.hw+CH)); out.push({x,z,gapped:gp,side:k,slot:i,rot:t.rot+(sg>0?Math.PI/2:-Math.PI/2)}); } };
   const end=(k,sg)=>{ const n=t[k]||0; for(let i=0;i<n;i++){ const gp=(t.gaps[k]||[]).indexOf(i)>=0; const [x,z]=localToWorld(t,sg*(t.hl+CH), -t.hw+(i+0.5)/n*(2*t.hw)); out.push({x,z,gapped:gp,side:k,slot:i,rot:t.rot}); } };
   long('seatsA',1); long('seatsB',-1); end('seatsE1',1); end('seatsE2',-1); return out; }
+// Пары ФИЗИЧЕСКИ соседних (по факту стоящих рядом) занятых стульев одного стола —
+// для прямоугольного это соседи по одной стороне (порядок slot уже по возрастанию),
+// для круглого — по кольцу, включая замыкающую пару последний-первый.
+function sameTableNeighborPairs(t){ const occ=chairSlots(t).filter(c=>!c.gapped), pairs=[];
+  if(t.shape==='round'){ if(occ.length>=2) for(let i=0;i<occ.length;i++) pairs.push([occ[i], occ[(i+1)%occ.length]]); return pairs; }
+  ['seatsA','seatsB','seatsE1','seatsE2'].forEach(side=>{ const s=occ.filter(c=>c.side===side);
+    for(let i=0;i<s.length-1;i++) pairs.push([s[i], s[i+1]]); });
+  return pairs; }
 function halfExt(t){ if(t.shape==='round') return {hx:t.R,hy:t.R}; const c=Math.abs(Math.cos(t.rot)),s=Math.abs(Math.sin(t.rot)); return {hx:t.hl*c+t.hw*s, hy:t.hl*s+t.hw*c}; }
 const tname=t=> t.name || ('Стол №'+(tables.indexOf(t)+1));
 const tsize=t=> t.shape==='round'? ('⌀ '+(t.R*2)+' см') : (t.hl*2+'×'+t.hw*2+' см');
@@ -288,14 +296,29 @@ function render(){
     const g=el('g',{transform:`translate(${(minX+maxX)/2},${minZ-56})`}); const w=270;
     g.appendChild(el('rect',{x:-w/2,y:-24,width:w,height:48,rx:24,fill:'#FBF3DD',stroke:'#E4C98A','stroke-width':3}));
     const tx=el('text',{x:0,y:9,'text-anchor':'middle','font-size':28,'font-weight':800,fill:'#A16207'}); tx.textContent='Вместе: '+total+' гостей'; g.appendChild(tx); floor.appendChild(g); });
-  // зазоры между стульями (красный если тесно) — самый верх
+  // зазоры между стульями — реальный edge-to-edge зазор через PlanGeometry, а не
+  // «расстояние между центрами минус 45», обрезанное до 0. Перекрытие показывается
+  // как «Перекрытие N см» (не «0 см») — см. Этап 3 плана.
   if(showDist){ const occ=t=>chairSlots(t).filter(c=>!c.gapped);
+    const half=PG.CHAIR_WIDTH/2;
+    const chairRect=(tbl,c)=>({id:tbl.id+'#'+c.side+'#'+c.slot, x:c.x, z:c.z, rot:0, hx:half, hy:half});
+    const drawGap=(ax,az,bx,bz,result)=>{ const mx=(ax+bx)/2,mz=(az+bz)/2, bad=result.severity!=='ok', label=PG.formatClearance(result);
+      floor.appendChild(el('line',{x1:ax,y1:az,x2:bx,y2:bz,stroke:bad?'#d64562':'#C99BB5','stroke-width':bad?5:3}));
+      const g=el('g',{transform:`translate(${mx},${mz})`});
+      g.appendChild(el('rect',{x:-60,y:-21,width:120,height:42,rx:21,fill:bad?'#FBE0E8':'#fff',stroke:bad?'#d64562':'#E4B7CB','stroke-width':3}));
+      const tt=el('text',{x:0,y:9,'text-anchor':'middle','font-size':label.length>9?20:25,'font-weight':800,fill:bad?'#c0304f':'#7E5670','pointer-events':'none'}); tt.textContent=label; g.appendChild(tt);
+      floor.appendChild(g); };
+    // между разными столами — как раньше, показываем все зазоры в радиусе интереса (230 см по центрам)
     for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){ const A=tables[i],B=tables[j]; if(Math.hypot(A.x-B.x,A.z-B.z)>700) continue; const ca=occ(A),cb=occ(B); if(!ca.length||!cb.length) continue;
-      let best=1e9,ax,az,bx,bz; ca.forEach(p=>cb.forEach(q=>{const d=Math.hypot(p.x-q.x,p.z-q.z); if(d<best){best=d;ax=p.x;az=p.z;bx=q.x;bz=q.z;}}));
-      if(best>230) continue; const cm=Math.max(0,Math.round(best-45)), warn=cm<50, mx=(ax+bx)/2,mz=(az+bz)/2;
-      floor.appendChild(el('line',{x1:ax,y1:az,x2:bx,y2:bz,stroke:warn?'#d64562':'#C99BB5','stroke-width':warn?5:3}));
-      const g=el('g',{transform:`translate(${mx},${mz})`}); g.appendChild(el('rect',{x:-52,y:-21,width:104,height:42,rx:21,fill:warn?'#FBE0E8':'#fff',stroke:warn?'#d64562':'#E4B7CB','stroke-width':3}));
-      const tt=el('text',{x:0,y:9,'text-anchor':'middle','font-size':25,'font-weight':800,fill:warn?'#c0304f':'#7E5670','pointer-events':'none'}); tt.textContent=cm+' см'; g.appendChild(tt); floor.appendChild(g); } }
+      let bestVal=1e9,bp=null,bq=null; ca.forEach(p=>cb.forEach(q=>{const d=Math.hypot(p.x-q.x,p.z-q.z); if(d<bestVal){bestVal=d;bp=p;bq=q;}}));
+      if(bestVal>230) continue;
+      const result=PG.measureChairToChair(chairRect(A,bp),chairRect(B,bq));
+      drawGap(bp.x,bp.z,bq.x,bq.z,result); }
+    // соседние стулья НА ОДНОМ столе — раньше не проверялось вообще; показываем только
+    // реальное физическое пересечение (штатный минимальный зазор в ряду — не ошибка)
+    tables.forEach(t=>{ sameTableNeighborPairs(t).forEach(([p,q])=>{
+      const result=PG.measureChairToChair(chairRect(t,p),chairRect(t,q));
+      if(result.severity==='overlap') drawGap(p.x,p.z,q.x,q.z,result); }); }); }
   document.getElementById('stat').textContent=`${tables.length} стол · ${tables.reduce((s,t)=>s+seatCount(t),0)} гостей`;
   renderInsp();
 }
