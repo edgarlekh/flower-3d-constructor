@@ -374,11 +374,18 @@ function render(){
     g.appendChild(body);
     if(t.bouquets&&t.bouquets.length) g.appendChild(el('circle',{cx:t.x,cy:t.z,r:14,fill:'#F4C6D9'}));
     chairSlots(t).forEach(c=>{ if(c.gapped && !sel) return;
-      // спрайт стула рисуем под БЛИЖАЙШИМ углом, кратным 90° (позиция — точная); иначе при
-      // произвольном повороте стола (напр. 45°) стулья превращаются в разнобойные «ромбы» —
-      // выглядит криво, хотя расстановка математически верна
-      const dispRot=Math.round((c.rot||0)/(Math.PI/2))*(Math.PI/2);
-      const cg=el('g',{transform:`translate(${c.x},${c.z}) rotate(${dispRot*180/Math.PI})`}); cg.style.cursor='pointer'; cg.dataset.id=tables.indexOf(t); cg.dataset.side=c.side; cg.dataset.slot=c.slot; cg.dataset.chair='1';
+      // Спрайт стула рисуем ПОД ТОЧНЫМ углом c.rot (не округляя до 90°) — округление до
+      // ближайшего кратного 90° было прошлой попыткой починить «стулья вразнобой» при
+      // произвольном повороте стола, но у неё был слепой пятно ровно на 45°/135°/225°/315°:
+      // c.rot там оказывается РОВНО ПОСЕРЕДИНЕ между двумя углами округления, весь ряд
+      // схлопывается в один и тот же (0° или 180°) — то есть квадратики стульев рисуются
+      // ось-выровненными, а сам стол при этом стоит по диагонали. Ряд из ось-выровненных
+      // квадратиков вдоль диагональной линии выглядит зубчатой кучей, а не рядом (это и
+      // видно на баг-репорте юзера — «стулья при 45° разбежались», позиции при этом были
+      // верны всегда, дело было только в повороте спрайта). Без округления стул всегда
+      // разворачивается ТОЧНО как стол — ряд выглядит опрятно при любом угле, не только
+      // при кратных 90°.
+      const cg=el('g',{transform:`translate(${c.x},${c.z}) rotate(${(c.rot||0)*180/Math.PI})`}); cg.style.cursor='pointer'; cg.dataset.id=tables.indexOf(t); cg.dataset.side=c.side; cg.dataset.slot=c.slot; cg.dataset.chair='1';
       if(c.gapped){ cg.appendChild(el('rect',{x:-20,y:-20,width:40,height:40,rx:8,fill:'#fff',stroke:'#DB2777','stroke-width':4,'stroke-dasharray':'8 6'})); cg.appendChild(el('path',{d:'M0 -11V11 M-11 0H11',stroke:'#DB2777','stroke-width':5,'stroke-linecap':'round'})); }
       else { cg.appendChild(el('rect',{x:-20,y:-22,width:40,height:32,rx:6,fill:'#F7E1EC',stroke:'#E3AEC9','stroke-width':3})); cg.appendChild(el('rect',{x:-20,y:6,width:40,height:12,rx:4,fill:'#EBC7DA'})); }
       g.appendChild(cg); });
