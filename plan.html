@@ -56,6 +56,9 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
 .insp .row button:hover{border-color:var(--rose);color:var(--rose)}
 .insp .row b{min-width:14px;text-align:center;font-variant-numeric:tabular-nums}
 .insp .row.hl{background:var(--rose-soft);border-radius:8px}
+.insp .row button:disabled{opacity:.35;cursor:not-allowed}
+.insp .row button:disabled:hover{border-color:var(--line);color:var(--ink)}
+.insp .capwarn{margin:-2px 14px 6px;font-size:10.5px;line-height:1.35;color:#b6355a;font-weight:600}
 /* мини-схема стола: клик по стулу — убрать, по пунктирному ＋ — поставить именно сюда */
 .dg{display:flex;flex-direction:column;align-items:center;padding:6px 10px 2px}
 .dg svg{width:100%;max-width:196px;height:auto}
@@ -76,6 +79,28 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
 .insp .acts button:hover{border-color:var(--rose);color:var(--rose-deep)}
 .insp .acts .del{border-color:#F0C7D3;background:#FBE7EE;color:#b6355a}
 .insp .acts svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2}
+/* диалог конфликта стыковки — не даём столам молча раздвигаться/сталкиваться */
+.dockmask{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;background:rgba(92,32,56,.35);backdrop-filter:blur(2px)}
+.dockmask.show{display:flex}
+.dockcard{width:min(380px,92vw);background:var(--panel);backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:20px}
+.dockttl{font-family:var(--serif);font-size:21px;font-weight:700;color:var(--rose-deep);margin-bottom:6px}
+.dockmsg{font-size:13px;color:var(--ink);line-height:1.45;margin-bottom:10px}
+.dockconf{font-size:11.5px;color:var(--ink2);line-height:1.6;margin-bottom:14px;max-height:130px;overflow-y:auto;background:var(--rose-soft);border-radius:10px;padding:8px 10px}
+.dockbtns{display:flex;flex-direction:column;gap:8px}
+.dockbtns button{border-radius:10px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid var(--line);background:#fff;color:var(--ink)}
+.dockbtns button:hover{border-color:var(--rose);color:var(--rose-deep)}
+#dock-remove{border-color:var(--rose);background:var(--rose-soft);color:var(--rose-deep)}
+/* группы столов */
+.insp .backlink{display:block;width:calc(100% - 24px);margin:9px 12px 0;text-align:left;border:none;background:none;color:var(--ink2);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;padding:0}
+.insp .backlink:hover{color:var(--rose-deep)}
+#gi-members{padding:2px 12px 6px;display:flex;flex-direction:column;gap:5px}
+#gi-members button{display:flex;justify-content:space-between;align-items:center;width:100%;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:9px;padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+#gi-members button:hover{border-color:var(--rose);color:var(--rose-deep)}
+#gi-members button b{font-weight:800;color:var(--ink2);font-size:11px}
+.galign{display:flex;flex-direction:column;gap:6px;padding:2px 12px 4px}
+.galign button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:9px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.galign button:hover{border-color:var(--rose);color:var(--rose-deep)}
+.groupbox{fill:none;stroke:var(--gold);stroke-width:3;stroke-dasharray:9 7}
 </style>
 </head>
 <body>
@@ -101,6 +126,7 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
     <option value="u">Буква П</option><option value="head">Президиум + круглые</option><option value="grid">Круглые сеткой</option><option value="rows">Банкет рядами</option>
   </select>
   <button id="distbtn" class="on"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12h18M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg>Зазоры между стульями</button>
+  <button id="dockbtn"><svg class="ic" viewBox="0 0 24 24"><path d="M8 12h8M14 8l4 4-4 4M4 6v12"/></svg>Стыковать столы</button>
   <button id="fitbtn"><svg class="ic" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Показать всё</button>
   <button id="lockbtn"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Зафиксировать</button>
 </div>
@@ -109,6 +135,7 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
 <div id="scalebar"><div class="bar" id="scalebar-bar"></div><span id="scalebar-txt">1 м</span></div>
 <div class="insp" id="insp">
   <div class="g"></div>
+  <button class="backlink" id="i-backgroup" style="display:none">← Группа: <span id="i-backgroup-nm"></span></button>
   <input class="nm" id="i-name" maxlength="26">
   <small class="s2" id="i-sub"></small>
   <div id="i-tablectl">
@@ -121,13 +148,52 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
   </div>
   <div class="acts"><button id="i-dup"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Копия</button><button class="del" id="i-del"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Удалить</button></div>
 </div>
+<div class="insp" id="ginsp">
+  <div class="g"></div>
+  <input class="nm" id="gi-name" maxlength="26" placeholder="Группа столов">
+  <small class="s2" id="gi-sub"></small>
+  <div class="sect">Поворот группы</div>
+  <div class="rotrow"><button data-grot="-1">⟲ −45°</button><button data-grot="1">+45° ⟳</button></div>
+  <div class="sect">Столы в группе</div>
+  <div id="gi-members"></div>
+  <div class="sect">Выравнивание</div>
+  <div class="galign"><button id="gi-center">Центрировать группу</button><button id="gi-hrow">Выровнять по горизонтали</button><button id="gi-vrow">Выровнять по вертикали</button></div>
+  <div class="acts"><button id="gi-ungroup"><svg viewBox="0 0 24 24"><path d="M9 3v18M15 3v18"/></svg>Разгруппировать</button></div>
+</div>
 <div class="hint" id="hint">Клик — выбрать · тяни — двигать (можно вплотную) · клик по ＋ — стул · клик по стулу — убрать</div>
+<div class="dockmask" id="dockmask">
+  <div class="dockcard">
+    <div class="dockttl" id="dockttl">Стыковка невозможна</div>
+    <div class="dockmsg" id="dockmsg">Стулья на обращённых сторонах занимают контактную зону. Что сделать?</div>
+    <div class="dockconf" id="dockconf"></div>
+    <div class="dockbtns">
+      <button id="dock-remove">Убрать конфликтующие стулья</button>
+      <button id="dock-gap" style="display:none">Создать группу с зазором 80 см</button>
+      <button id="dock-apart">Оставить столы раздельно</button>
+      <button id="dock-cancel">Отмена</button>
+    </div>
+  </div>
+</div>
+<div class="dockmask" id="dockpreview">
+  <div class="dockcard">
+    <div class="dockttl" id="dp-ttl">Стыковка столов</div>
+    <div class="dockmsg" id="dp-msg"></div>
+    <div class="dockbtns">
+      <button id="dp-confirm">Состыковать</button>
+      <button id="dp-cancel">Отмена</button>
+    </div>
+  </div>
+</div>
 
+<script src="assets/js/plan-geometry.js"></script>
 <script>
 const SVG='http://www.w3.org/2000/svg', floor=document.getElementById('floor');
-const HALL_KEY='flowerHall', ROOM_KEY='flowerRoom';
+const PG=window.PlanGeometry;
+let nextIdSeq=1;
+const genId=()=> 't'+Date.now().toString(36)+(nextIdSeq++).toString(36);
+const HALL_KEY='flowerHall', ROOM_KEY='flowerRoom', GROUPS_KEY='flowerGroups';
 const readJSON=k=>{try{return JSON.parse(localStorage.getItem(k));}catch(_){return null;}};
-let tables=[], objs=[], locked=false, showDist=true, selected=null, selObj=null, guides=[], VB={x:-650,z:-450,w:1300,h:900};
+let tables=[], objs=[], groups=[], locked=false, showDist=true, selected=null, selObj=null, selectedGroup=null, guides=[], VB={x:-650,z:-450,w:1300,h:900};
 
 // ---- загрузка/сохранение (совместимо с 3D-залом) ----
 function load(){
@@ -136,39 +202,105 @@ function load(){
   locked = !!(h && h.locked);
   tables = list.map(d=>{
     const t=Object.assign({}, d);
+    t.id = d.id || genId();
     t.shape = d.shape==='rect'?'rect':'round';
     t.x=+d.x||0; t.z=+d.z||0; t.rot=+d.rot||0; t.name=d.name||'';
     if(t.shape==='rect'){ t.hl=d.hl||120; t.hw=d.hw||45;
       let a=d.seatsA,b=d.seatsB; if(a==null||b==null){const s=d.seats||8;a=Math.ceil(s/2);b=s-a;}
       t.seatsA=a; t.seatsB=b; t.seatsE1=d.seatsE1||0; t.seatsE2=d.seatsE2||0;
       t.gaps=(d.gaps&&typeof d.gaps==='object'&&!Array.isArray(d.gaps))?d.gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]};
-      ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ if(!Array.isArray(t.gaps[k])) t.gaps[k]=[]; });
-    } else { t.R=d.R||75; t.seats=d.seats||6; }
+      ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ if(!Array.isArray(t.gaps[k])) t.gaps[k]=[];
+        t.gaps[k]=PG.normalizeGaps(t[k]||0, t.gaps[k]); });
+    } else { t.R=d.R||75;
+      // круглый стол: seatSlots — число угловых позиций (как ширина стороны у
+      // прямоугольного), gaps — какие из них сейчас пустуют. seats — производное
+      // поле для совместимости с hall.html, пересчитывается ниже и при каждом save().
+      t.seatSlots = d.seatSlots!=null ? Math.max(0,+d.seatSlots||0) : Math.max(0,+d.seats||6);
+      t.gaps = PG.normalizeGaps(t.seatSlots, Array.isArray(d.gaps)?d.gaps:[]);
+      t.distributionMode = (d.distributionMode==='even' && !t.gaps.length) ? 'even' : 'fixed';
+      t.seats = Math.max(0, t.seatSlots - t.gaps.length);
+    }
+    t.groupId = d.groupId || null;
     t.bouquets=d.bouquets||[]; t.settings=d.settings||[];
     return t;
   });
   objs = (readJSON(ROOM_KEY)||[]).map(o=>Object.assign({},o));
+  // группы: отбрасываем битые/неполные (нет id, <2 валидных столов) — иначе достаточно
+  // руками подправить localStorage, чтобы получить группу-призрак без столов
+  const byId={}; tables.forEach(t=>byId[t.id]=t);
+  groups = (readJSON(GROUPS_KEY)||[]).map(g=>Object.assign({},g)).filter(g=>{
+    if(!g.id || !Array.isArray(g.tableIds)) return false;
+    g.tableIds = g.tableIds.filter(id=>byId[id]);
+    return g.tableIds.length>=2;
+  });
+  // столы могут ссылаться на groupId, которого больше нет (группа удалена руками) — чистим
+  const validGroupIds={}; groups.forEach(g=>validGroupIds[g.id]=true);
+  tables.forEach(t=>{ if(t.groupId && !validGroupIds[t.groupId]) t.groupId=null; });
 }
 function toData(t){ const d=Object.assign({},t);
-  d.seats = t.shape==='rect' ? rectTotal(t) : t.seats;
+  d.seats = t.shape==='rect' ? rectTotal(t) : Math.max(0,(t.seatSlots||0)-(t.gaps||[]).length);
   return d; }
 function save(){
   try{ localStorage.setItem(HALL_KEY, JSON.stringify({tables:tables.map(toData), locked})); }catch(_){}
   try{ localStorage.setItem(ROOM_KEY, JSON.stringify(objs)); }catch(_){}
+  try{ localStorage.setItem(GROUPS_KEY, JSON.stringify(groups)); }catch(_){}
 }
 // ---- геометрия (см) — как в 3D ----
 const CH=22; // вынос стула за кромку
+// Единая фабрика круглого стола — используется и при загрузке, и при создании нового,
+// чтобы seatSlots/gaps/distributionMode были проставлены везде одинаково (иначе
+// chairSlots() увидит seatSlots===undefined и не нарисует ни одного стула).
+function newRoundTable(x,z,R,seats,rot,extra){ const n=Math.max(0,seats||0);
+  return Object.assign({id:genId(),shape:'round',x,z,rot:rot||0,R,seatSlots:n,gaps:[],distributionMode:'even',seats:n,bouquets:[],settings:[]}, extra||{}); }
 const rectTotal=t=>['seatsA','seatsB','seatsE1','seatsE2'].reduce((s,k)=>s+Math.max(0,(t[k]||0)-(t.gaps[k]||[]).length),0);
 const seatCount=t=> t.shape==='rect'?rectTotal(t):t.seats;
 function localToWorld(t,lx,lz){ const c=Math.cos(t.rot),s=Math.sin(t.rot); return [t.x+c*lx+s*lz, t.z-s*lx+c*lz]; }
 function chairSlots(t){ const out=[];
-  if(t.shape==='round'){ const n=t.seats; for(let i=0;i<n;i++){ const a=i/Math.max(n,1)*Math.PI*2-Math.PI/2+t.rot; out.push({x:t.x+Math.cos(a)*(t.R+CH),z:t.z+Math.sin(a)*(t.R+CH),gapped:false,side:'seats',slot:i,rot:a+Math.PI/2}); } return out; }
+  if(t.shape==='round'){ const n=t.seatSlots||0, gaps=t.gaps||[];
+    for(let i=0;i<n;i++){ const gp=gaps.indexOf(i)>=0; const a=i/Math.max(n,1)*Math.PI*2-Math.PI/2+t.rot;
+      out.push({x:t.x+Math.cos(a)*(t.R+CH),z:t.z+Math.sin(a)*(t.R+CH),gapped:gp,side:'seats',slot:i,rot:a+Math.PI/2}); }
+    return out; }
   const long=(k,sg)=>{ const n=t[k]||0; for(let i=0;i<n;i++){ const gp=(t.gaps[k]||[]).indexOf(i)>=0; const [x,z]=localToWorld(t,-t.hl+(i+0.5)/n*(2*t.hl), sg*(t.hw+CH)); out.push({x,z,gapped:gp,side:k,slot:i,rot:t.rot+(sg>0?Math.PI/2:-Math.PI/2)}); } };
   const end=(k,sg)=>{ const n=t[k]||0; for(let i=0;i<n;i++){ const gp=(t.gaps[k]||[]).indexOf(i)>=0; const [x,z]=localToWorld(t,sg*(t.hl+CH), -t.hw+(i+0.5)/n*(2*t.hw)); out.push({x,z,gapped:gp,side:k,slot:i,rot:t.rot}); } };
   long('seatsA',1); long('seatsB',-1); end('seatsE1',1); end('seatsE2',-1); return out; }
+// Пары ФИЗИЧЕСКИ соседних (по факту стоящих рядом) занятых стульев одного стола —
+// для прямоугольного это соседи по одной стороне (порядок slot уже по возрастанию),
+// для круглого — по кольцу, включая замыкающую пару последний-первый.
+function sameTableNeighborPairs(t){ const occ=chairSlots(t).filter(c=>!c.gapped), pairs=[];
+  if(t.shape==='round'){ if(occ.length>=2) for(let i=0;i<occ.length;i++) pairs.push([occ[i], occ[(i+1)%occ.length]]); return pairs; }
+  ['seatsA','seatsB','seatsE1','seatsE2'].forEach(side=>{ const s=occ.filter(c=>c.side===side);
+    for(let i=0;i<s.length-1;i++) pairs.push([s[i], s[i+1]]); });
+  return pairs; }
 function halfExt(t){ if(t.shape==='round') return {hx:t.R,hy:t.R}; const c=Math.abs(Math.cos(t.rot)),s=Math.abs(Math.sin(t.rot)); return {hx:t.hl*c+t.hw*s, hy:t.hl*s+t.hw*c}; }
 const tname=t=> t.name || ('Стол №'+(tables.indexOf(t)+1));
 const tsize=t=> t.shape==='round'? ('⌀ '+(t.R*2)+' см') : (t.hl*2+'×'+t.hw*2+' см');
+
+// ---- группы столов (настоящие, а не косметический clusters()) ----
+// Реальные повёрнутые углы стола (OBB), а не AABB halfExt — нужно для честного
+// геометрического центра группы (ТЗ 3.7: «нельзя использовать только мировые AABB»).
+function tableCorners(t){ if(t.shape==='round'){ const R=t.R; return [{x:t.x-R,z:t.z-R},{x:t.x+R,z:t.z-R},{x:t.x+R,z:t.z+R},{x:t.x-R,z:t.z+R}]; }
+  const c=Math.cos(t.rot), s=Math.sin(t.rot);
+  return [[-t.hl,-t.hw],[t.hl,-t.hw],[t.hl,t.hw],[-t.hl,t.hw]].map(p=>({x:t.x+c*p[0]+s*p[1], z:t.z-s*p[0]+c*p[1]})); }
+const groupTables=g=> g.tableIds.map(id=>tables.find(t=>t.id===id)).filter(Boolean);
+const groupOf=t=> t.groupId ? groups.find(g=>g.id===t.groupId) : null;
+function groupBBox(g){ const ts=groupTables(g); let minX=1e9,maxX=-1e9,minZ=1e9,maxZ=-1e9;
+  ts.forEach(t=>tableCorners(t).forEach(p=>{ minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minZ=Math.min(minZ,p.z);maxZ=Math.max(maxZ,p.z); }));
+  return {minX,maxX,minZ,maxZ,cx:(minX+maxX)/2,cz:(minZ+maxZ)/2}; }
+const groupCapacity=g=> groupTables(g).reduce((s,t)=>s+seatCount(t),0);
+const gname=g=> g.name || ('Группа '+(groups.indexOf(g)+1));
+// Вращение группы вокруг её собственного геометрического центра (не центра одного из
+// столов) — та же матрица поворота, что и localToWorld, чтобы направление совпадало
+// с поворотом отдельного стола (кнопки ⟲/⟳).
+function rotateGroupAround(g,deltaRad){ const bb=groupBBox(g), cx=bb.cx, cz=bb.cz, c=Math.cos(deltaRad), s=Math.sin(deltaRad);
+  groupTables(g).forEach(t=>{ const rx=t.x-cx, rz=t.z-cz; t.x=cx+c*rx+s*rz; t.z=cz-s*rx+c*rz; t.rot+=deltaRad; }); }
+function groupMoveBy(g,dx,dz){ groupTables(g).forEach(t=>{ t.x+=dx; t.z+=dz; }); }
+function groupCenterOrigin(g){ const bb=groupBBox(g); groupMoveBy(g,-bb.cx,-bb.cz); }
+function groupAlignRow(g){ const ts=groupTables(g); if(ts.length<2) return; const avg=ts.reduce((s,t)=>s+t.z,0)/ts.length; ts.forEach(t=>t.z=avg); }
+function groupAlignColumn(g){ const ts=groupTables(g); if(ts.length<2) return; const avg=ts.reduce((s,t)=>s+t.x,0)/ts.length; ts.forEach(t=>t.x=avg); }
+// Разгруппировка: никаких потерь — seats/gaps/bouquets/settings остаются на столах как есть,
+// удаляется только запись группы и ссылка groupId (ТЗ 3.6 и критерий приёмки №19).
+function ungroupNow(g){ groupTables(g).forEach(t=>t.groupId=null); groups=groups.filter(x=>x!==g);
+  if(selectedGroup===g) selectedGroup=null; }
 
 // ---- рендер ----
 const OBJ={floor:{w:400,h:300,label:'Танцпол',fill:'#F3E7DF',stroke:'#DFC7B4'},stage:{w:360,h:120,label:'Сцена',fill:'#EAD9E6',stroke:'#D3B7CC'},bar:{w:220,h:80,label:'Бар',fill:'#DCE6DE',stroke:'#B7CDBE'},arch:{w:160,h:40,label:'Арка',fill:'#F6E7C6',stroke:'#E4C98A'}};
@@ -244,6 +376,18 @@ function render(){
       else { cg.appendChild(el('rect',{x:-20,y:-22,width:40,height:32,rx:6,fill:'#F7E1EC',stroke:'#E3AEC9','stroke-width':3})); cg.appendChild(el('rect',{x:-20,y:6,width:40,height:12,rx:4,fill:'#EBC7DA'})); }
       g.appendChild(cg); });
     floor.appendChild(g); });
+  // рамка выбранной группы столов — по реальному OBB-охвату (не по AABB одного стола)
+  if(selectedGroup && groups.indexOf(selectedGroup)>=0){ const bb=groupBBox(selectedGroup);
+    floor.appendChild(el('rect',{class:'groupbox',x:bb.minX-16,y:bb.minZ-16,width:bb.maxX-bb.minX+32,height:bb.maxZ-bb.minZ+32,rx:14}));
+    const gb=el('g',{transform:`translate(${bb.cx},${bb.minZ-16-26})`});
+    gb.appendChild(el('rect',{x:-90,y:-18,width:180,height:36,rx:18,fill:'#FBF3DD',stroke:'#E4C98A','stroke-width':3}));
+    const gt=el('text',{x:0,y:6,'text-anchor':'middle','font-size':20,'font-weight':800,fill:'#A16207'}); gt.textContent='👥 '+gname(selectedGroup); gb.appendChild(gt);
+    floor.appendChild(gb); }
+  // ghost-preview будущего положения стола B при стыковке (ТЗ 3.5, пункт 4)
+  if(dockGhost){ const dg=dockGhost, gg=el('g',{transform:`translate(${dg.x},${dg.z}) rotate(${dg.rot*180/Math.PI})`,opacity:.55});
+    if(dg.shape==='round') gg.appendChild(el('circle',{r:dg.R,fill:'#FCE7F3',stroke:'#DB2777','stroke-width':3,'stroke-dasharray':'10 6'}));
+    else gg.appendChild(el('rect',{x:-dg.hl,y:-dg.hw,width:dg.hl*2,height:dg.hw*2,rx:14,fill:'#FCE7F3',stroke:'#DB2777','stroke-width':3,'stroke-dasharray':'10 6'}));
+    floor.appendChild(gg); }
   // подписи столов — верхний слой. Одинаковые столы должны выглядеть ОДИНАКОВО независимо от поворота:
   // подпись идёт вдоль ДЛИННОЙ стороны стола на экране (не всегда горизонтально) — тогда почти всегда
   // хватает места на полный размер шрифта; авто-уменьшение — лишь подстраховка для совсем узких случаев.
@@ -262,16 +406,31 @@ function render(){
     const g=el('g',{transform:`translate(${(minX+maxX)/2},${minZ-56})`}); const w=270;
     g.appendChild(el('rect',{x:-w/2,y:-24,width:w,height:48,rx:24,fill:'#FBF3DD',stroke:'#E4C98A','stroke-width':3}));
     const tx=el('text',{x:0,y:9,'text-anchor':'middle','font-size':28,'font-weight':800,fill:'#A16207'}); tx.textContent='Вместе: '+total+' гостей'; g.appendChild(tx); floor.appendChild(g); });
-  // зазоры между стульями (красный если тесно) — самый верх
+  // зазоры между стульями — реальный edge-to-edge зазор через PlanGeometry, а не
+  // «расстояние между центрами минус 45», обрезанное до 0. Перекрытие показывается
+  // как «Перекрытие N см» (не «0 см») — см. Этап 3 плана.
   if(showDist){ const occ=t=>chairSlots(t).filter(c=>!c.gapped);
+    const half=PG.CHAIR_WIDTH/2;
+    const chairRect=(tbl,c)=>({id:tbl.id+'#'+c.side+'#'+c.slot, x:c.x, z:c.z, rot:0, hx:half, hy:half});
+    const drawGap=(ax,az,bx,bz,result)=>{ const mx=(ax+bx)/2,mz=(az+bz)/2, bad=result.severity!=='ok', label=PG.formatClearance(result);
+      floor.appendChild(el('line',{x1:ax,y1:az,x2:bx,y2:bz,stroke:bad?'#d64562':'#C99BB5','stroke-width':bad?5:3}));
+      const g=el('g',{transform:`translate(${mx},${mz})`});
+      g.appendChild(el('rect',{x:-60,y:-21,width:120,height:42,rx:21,fill:bad?'#FBE0E8':'#fff',stroke:bad?'#d64562':'#E4B7CB','stroke-width':3}));
+      const tt=el('text',{x:0,y:9,'text-anchor':'middle','font-size':label.length>9?20:25,'font-weight':800,fill:bad?'#c0304f':'#7E5670','pointer-events':'none'}); tt.textContent=label; g.appendChild(tt);
+      floor.appendChild(g); };
+    // между разными столами — как раньше, показываем все зазоры в радиусе интереса (230 см по центрам)
     for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){ const A=tables[i],B=tables[j]; if(Math.hypot(A.x-B.x,A.z-B.z)>700) continue; const ca=occ(A),cb=occ(B); if(!ca.length||!cb.length) continue;
-      let best=1e9,ax,az,bx,bz; ca.forEach(p=>cb.forEach(q=>{const d=Math.hypot(p.x-q.x,p.z-q.z); if(d<best){best=d;ax=p.x;az=p.z;bx=q.x;bz=q.z;}}));
-      if(best>230) continue; const cm=Math.max(0,Math.round(best-45)), warn=cm<50, mx=(ax+bx)/2,mz=(az+bz)/2;
-      floor.appendChild(el('line',{x1:ax,y1:az,x2:bx,y2:bz,stroke:warn?'#d64562':'#C99BB5','stroke-width':warn?5:3}));
-      const g=el('g',{transform:`translate(${mx},${mz})`}); g.appendChild(el('rect',{x:-52,y:-21,width:104,height:42,rx:21,fill:warn?'#FBE0E8':'#fff',stroke:warn?'#d64562':'#E4B7CB','stroke-width':3}));
-      const tt=el('text',{x:0,y:9,'text-anchor':'middle','font-size':25,'font-weight':800,fill:warn?'#c0304f':'#7E5670','pointer-events':'none'}); tt.textContent=cm+' см'; g.appendChild(tt); floor.appendChild(g); } }
+      let bestVal=1e9,bp=null,bq=null; ca.forEach(p=>cb.forEach(q=>{const d=Math.hypot(p.x-q.x,p.z-q.z); if(d<bestVal){bestVal=d;bp=p;bq=q;}}));
+      if(bestVal>230) continue;
+      const result=PG.measureChairToChair(chairRect(A,bp),chairRect(B,bq));
+      drawGap(bp.x,bp.z,bq.x,bq.z,result); }
+    // соседние стулья НА ОДНОМ столе — раньше не проверялось вообще; показываем только
+    // реальное физическое пересечение (штатный минимальный зазор в ряду — не ошибка)
+    tables.forEach(t=>{ sameTableNeighborPairs(t).forEach(([p,q])=>{
+      const result=PG.measureChairToChair(chairRect(t,p),chairRect(t,q));
+      if(result.severity==='overlap') drawGap(p.x,p.z,q.x,q.z,result); }); }); }
   document.getElementById('stat').textContent=`${tables.length} стол · ${tables.reduce((s,t)=>s+seatCount(t),0)} гостей`;
-  renderInsp();
+  updatePanels();
 }
 function clusters(){ const p=tables.map((_,i)=>i); const find=i=>p[i]===i?i:(p[i]=find(p[i]));
   for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){ const a=tables[i],b=tables[j],ea=halfExt(a),eb=halfExt(b); const ox=ea.hx+eb.hx-Math.abs(a.x-b.x),oy=ea.hy+eb.hy-Math.abs(a.z-b.z); if(ox>-12&&oy>-12) p[find(i)]=find(j); }
@@ -280,16 +439,146 @@ function clusters(){ const p=tables.map((_,i)=>i); const find=i=>p[i]===i?i:(p[i
 // «отпечаток» стола = список боксов: столешница + КАЖДЫЙ реально стоящий стул отдельно
 // (не один общий прямоугольник — иначе убранные с одной стороны стулья не помогают сблизить столы,
 // как жаловался юзер: «не даёт соединить столы», хотя место с той стороны освобождено)
-function tableParts(t){ const e=halfExt(t); const parts=[{minX:t.x-e.hx,maxX:t.x+e.hx,minZ:t.z-e.hy,maxZ:t.z+e.hy}];
-  chairSlots(t).forEach(c=>{ if(c.gapped)return; parts.push({minX:c.x-18,maxX:c.x+18,minZ:c.z-18,maxZ:c.z+18}); });
+function tableBodyPart(t){ const e=halfExt(t); return {minX:t.x-e.hx,maxX:t.x+e.hx,minZ:t.z-e.hy,maxZ:t.z+e.hy}; }
+function chairPartsWithMeta(t){ return chairSlots(t).filter(c=>!c.gapped).map(c=>({minX:c.x-18,maxX:c.x+18,minZ:c.z-18,maxZ:c.z+18,side:c.side,slot:c.slot,x:c.x,z:c.z})); }
+function tableParts(t){ const parts=[tableBodyPart(t)];
+  chairPartsWithMeta(t).forEach(c=>parts.push(c));
   return parts; }
-function partsOverlap(pa,pb){ for(const a of pa) for(const b of pb){ if(Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX)>0 && Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ)>0) return true; } return false; }
-function overlapsOther(t){ const pa=tableParts(t); return tables.some(o=>o!==t && partsOverlap(pa,tableParts(o))); }
-function resolve(t){ for(let k=0;k<6;k++){ let moved=false; tables.forEach(o=>{ if(o===t)return;
-  const pa=tableParts(t), pb=tableParts(o); let ox=0,oz=0,found=false;
+function boxOverlap(a,b){ return Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX)>0 && Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ)>0; }
+function partsOverlap(pa,pb){ for(const a of pa) for(const b of pb){ if(boxOverlap(a,b)) return true; } return false; }
+// Объекты зала (бар/сцена/танцпол/арка) — статичные препятствия того же ранга, что и другие
+// столы: стол/стул не должен вставать поверх них (ТЗ 3.2 п.4 и критерий приёмки №21).
+function objBodyPart(o){ return {minX:o.x-o.w/2,maxX:o.x+o.w/2,minZ:o.z-o.h/2,maxZ:o.z+o.h/2}; }
+function overlapsOther(t){ const pa=tableParts(t);
+  if(tables.some(o=>o!==t && partsOverlap(pa,tableParts(o)))) return true;
+  return objs.some(o=>partsOverlap(pa,[objBodyPart(o)])); }
+// Полное разведение (столешница+стулья) — используется там, где раздвигание оправдано и
+// ожидаемо (поворот, добавление/дублирование стола, готовые схемы), но НЕ при обычном
+// перетаскивании — там раздвигание ощущается как «стол сам уехал», см. resolveBodies().
+function resolve(t){ for(let k=0;k<6;k++){ let moved=false;
+  const obstacles=tables.filter(o=>o!==t).map(o=>({x:o.x,z:o.z,parts:tableParts(o)}))
+    .concat(objs.map(o=>({x:o.x,z:o.z,parts:[objBodyPart(o)]})));
+  obstacles.forEach(o=>{
+  const pa=tableParts(t), pb=o.parts; let ox=0,oz=0,found=false;
   pa.forEach(a=>pb.forEach(b=>{ const dx=Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX), dz=Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ);
     if(dx>0&&dz>0){ found=true; if(dx>ox)ox=dx; if(dz>oz)oz=dz; } }));
   if(found){ const dx=t.x-o.x,dz=t.z-o.z; if(Math.abs(dx)>=Math.abs(dz)) t.x+=(dx>=0?ox:-ox); else t.z+=(dz>=0?oz:-oz); moved=true; } }); if(!moved)break; } }
+// Разведение ТОЛЬКО по столешницам (без стульев) — физика, которую нельзя нарушать никогда
+// (два стола не могут занимать одно место), но которая не мешает столам с конфликтующими
+// стульями просто соприкоснуться при перетаскивании — конфликт стульев решает диалог
+// стыковки (findChairConflicts + showDockDialog), а не молчаливое раздвигание.
+function resolveBodies(t){ for(let k=0;k<6;k++){ let moved=false;
+  const obstacles=tables.filter(o=>o!==t).map(o=>({x:o.x,z:o.z,body:tableBodyPart(o)}))
+    .concat(objs.map(o=>({x:o.x,z:o.z,body:objBodyPart(o)})));
+  obstacles.forEach(o=>{
+  const a=tableBodyPart(t), b=o.body;
+  const dx=Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX), dz=Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ);
+  if(dx>0&&dz>0){ const ddx=t.x-o.x,ddz=t.z-o.z; if(Math.abs(ddx)>=Math.abs(ddz)) t.x+=(ddx>=0?dx:-dx); else t.z+=(ddz>=0?dz:-dz); moved=true; } }); if(!moved)break; } }
+// Симметрично: перетаскиваемый объект зала тоже не должен вставать поверх стола
+// (по столешнице — без учёта стульев, тот же уровень точности, что и у resolveBodies).
+function resolveObjBody(o){ for(let k=0;k<6;k++){ let moved=false; tables.forEach(t=>{
+  const a=objBodyPart(o), b=tableBodyPart(t);
+  const dx=Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX), dz=Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ);
+  if(dx>0&&dz>0){ const ddx=o.x-t.x,ddz=o.z-t.z; if(Math.abs(ddx)>=Math.abs(ddz)) o.x+=(ddx>=0?dx:-dx); else o.z+=(ddz>=0?dz:-dz); moved=true; } }); if(!moved)break; } }
+const dispSide=s=> s==='table' ? 'столешница' : (SIDE_NAMES[s]||s);
+// Конфликты стульев после перетаскивания: чужие/свои стулья либо друг с другом, либо со
+// столешницей соседа. side:'table' — конфликт со столешницей целиком (не с конкретным местом).
+function findChairConflicts(t){ const mine=chairPartsWithMeta(t), myBody=tableBodyPart(t), out=[];
+  tables.forEach(o=>{ if(o===t) return; const theirs=chairPartsWithMeta(o), theirBody=tableBodyPart(o);
+    mine.forEach(a=>theirs.forEach(b=>{ if(boxOverlap(a,b)) out.push({other:o,a,b}); }));
+    mine.forEach(a=>{ if(boxOverlap(a,theirBody)) out.push({other:o,a,b:{side:'table',slot:-1,x:o.x,z:o.z}}); });
+    theirs.forEach(b=>{ if(boxOverlap(myBody,b)) out.push({other:o,a:{side:'table',slot:-1,x:t.x,z:t.z},b}); }); });
+  return out; }
+// ---- инструмент «Стыковать столы»: автоопределение сторон + расчёт целевого положения ----
+// Переводит МИРОВОЕ направление (dx,dz) в локальные оси стола t (обратный поворот t.rot).
+function worldToLocalDir(t,dx,dz){ const c=Math.cos(t.rot), s=Math.sin(t.rot); return {lx:c*dx-s*dz, lz:s*dx+c*dz}; }
+// Какой из 4 сторон прямоугольного стола обращена в направлении (dx,dz) от его центра.
+function facingSide(t,dx,dz){ if(t.shape!=='rect') return 'seats';
+  const {lx,lz}=worldToLocalDir(t,dx,dz);
+  return Math.abs(lx)>=Math.abs(lz) ? (lx>=0?'seatsE1':'seatsE2') : (lz>=0?'seatsA':'seatsB'); }
+// Полу-протяжённость стола (OBB), если его спроецировать на мировое направление (dx,dz) —
+// нужна, чтобы поставить два стола ровно впритык под любым углом, а не только 0/90°.
+function projHalfExtent(t,dx,dz){ if(t.shape==='round') return t.R;
+  const {lx,lz}=worldToLocalDir(t,dx,dz); return t.hl*Math.abs(lx)+t.hw*Math.abs(lz); }
+// Расчёт плана стыковки A (неподвижный) + B (подвигаем): режим (торец-к-торцу/бок-о-бок/
+// Г-образно/свободно) и целевые координаты B, чтобы он встал вплотную к A по стороне,
+// обращённой к его текущему положению — центры при этом остаются на одной линии
+// (перпендикулярного смещения не добавляем, как это уже делают готовые схемы приложения).
+function computeDockPlan(A,B){
+  let dx=B.x-A.x, dz=B.z-A.z, dist=Math.hypot(dx,dz)||1;
+  const sideA=facingSide(A,dx,dz), sideB=facingSide(B,-dx,-dz);
+  let ux=dx/dist, uz=dz/dist;
+  if(A.shape==='rect'){ // канонический мировой вектор нормали стороны A (не «сырое» направление на B) —
+    // так стыковка получается ровной даже если B изначально стоит немного наискось от A
+    const axis=(sideA==='seatsE1'||sideA==='seatsE2')?'x':'z', sign=(sideA==='seatsE1'||sideA==='seatsA')?1:-1;
+    const lx=axis==='x'?sign:0, lz=axis==='z'?sign:0, c=Math.cos(A.rot), s=Math.sin(A.rot);
+    ux=c*lx+s*lz; uz=-s*lx+c*lz; }
+  const gap=projHalfExtent(A,ux,uz)+projHalfExtent(B,ux,uz);
+  const longA=sideA==='seatsE1'||sideA==='seatsE2', longB=sideB==='seatsE1'||sideB==='seatsE2';
+  const type=(A.shape!=='rect'||B.shape!=='rect') ? 'free' : (longA&&longB?'end-to-end':(!longA&&!longB?'side-by-side':'L'));
+  return {x:A.x+ux*gap, z:A.z+uz*gap, sideA, sideB, type, dir:{x:ux,z:uz}};
+}
+const DOCK_TYPE_NAMES={'end-to-end':'Торец к торцу','side-by-side':'Бок о бок','L':'Г-образно','free':'Свободная стыковка'};
+function addGapAt(t,side,slot){ if(side==='table'||slot<0) return;
+  if(side==='seats'){ const g=t.gaps=(t.gaps||[]); if(g.indexOf(slot)<0) g.push(slot); t.seats=Math.max(0,(t.seatSlots||0)-g.length); }
+  else { const g=t.gaps[side]=(t.gaps[side]||[]); if(g.indexOf(slot)<0) g.push(slot); } }
+function showDockDialog(t,startX,startZ,conflicts,opts){ opts=opts||{};
+  const mask=document.getElementById('dockmask');
+  document.getElementById('dockttl').textContent = opts.title || 'Стыковка невозможна';
+  document.getElementById('dockmsg').textContent = opts.message || 'Стулья на обращённых сторонах занимают контактную зону. Что сделать?';
+  const lines=conflicts.slice(0,6).map(c=>`${tname(t)} / ${dispSide(c.a.side)}${c.a.slot>=0?' / место '+(c.a.slot+1):''} ↔ ${tname(c.other)} / ${dispSide(c.b.side)}${c.b.slot>=0?' / место '+(c.b.slot+1):''}`);
+  document.getElementById('dockconf').innerHTML = (conflicts.length>1?`<b>${conflicts.length} конфликта</b><br>`:'') + lines.join('<br>');
+  mask.classList.add('show');
+  const removeBtn=document.getElementById('dock-remove'), gapBtn=document.getElementById('dock-gap'), apartBtn=document.getElementById('dock-apart'), cancelBtn=document.getElementById('dock-cancel');
+  // «Создать группу с зазором» имеет смысл только в контексте инструмента стыковки (известен
+  // второй стол и направление докинга) — при обычном перетаскивании (Этап 4) кнопка скрыта.
+  gapBtn.style.display = opts.other ? 'flex' : 'none';
+  const cleanup=()=>{ mask.classList.remove('show'); removeBtn.onclick=gapBtn.onclick=apartBtn.onclick=cancelBtn.onclick=null; };
+  removeBtn.onclick=()=>{ conflicts.forEach(c=>{ addGapAt(t,c.a.side,c.a.slot); addGapAt(c.other,c.b.side,c.b.slot); }); cleanup(); render(); save(); if(opts.afterRemove) opts.afterRemove(); };
+  gapBtn.onclick=()=>{ if(opts.gapDir){ t.x+=opts.gapDir.x*80; t.z+=opts.gapDir.z*80; } cleanup(); render(); save(); if(opts.afterGap) opts.afterGap(); };
+  apartBtn.onclick=()=>{ t.x=startX; t.z=startZ; cleanup(); render(); save(); if(opts.afterApart) opts.afterApart(); };
+  cancelBtn.onclick=()=>{ cleanup(); render(); save(); if(opts.afterCancel) opts.afterCancel(); };
+}
+function createGroupFromDock(A,B,plan){
+  const g={id:genId(),tableIds:[A.id,B.id],type:plan.type,name:'',confirmed:true};
+  groups.push(g); A.groupId=g.id; B.groupId=g.id;
+  selected=null; selectedGroup=g; render(); save(); }
+// ---- инструмент «Стыковать столы»: выбор A → B → превью → подтверждение (ТЗ 3.5) ----
+let docking=false, dockA=null, dockGhost=null;
+const HINT_DEFAULT=document.getElementById('hint').textContent;
+function setDocking(v){ docking=v; dockA=null; dockGhost=null;
+  if(v){ selected=null; selectedGroup=null; selObj=null; }
+  document.getElementById('dockbtn').classList.toggle('on',v);
+  document.getElementById('hint').textContent = v?'Стыковка столов: выберите первый стол':HINT_DEFAULT;
+  render(); }
+function pickDockTable(t){
+  if(!dockA){ dockA=t; selected=t; selectedGroup=null; render();
+    document.getElementById('hint').textContent='Стыковка столов: выберите второй стол'; return; }
+  if(t===dockA) return;
+  const A=dockA, B=t, plan=computeDockPlan(A,B);
+  setDocking(false);
+  showDockPreview(A,B,plan);
+}
+function showDockPreview(A,B,plan){
+  dockGhost={shape:B.shape,x:plan.x,z:plan.z,rot:B.rot,hl:B.hl,hw:B.hw,R:B.R};
+  const guests=seatCount(A)+seatCount(B);
+  document.getElementById('dp-ttl').textContent=DOCK_TYPE_NAMES[plan.type]||'Стыковка столов';
+  document.getElementById('dp-msg').textContent=`${tname(A)} + ${tname(B)} — ${guests} гостей всего. Стол «${tname(B)}» встанет вплотную к «${tname(A)}».`;
+  render();
+  const mask=document.getElementById('dockpreview'); mask.classList.add('show');
+  const confirmBtn=document.getElementById('dp-confirm'), cancelBtn=document.getElementById('dp-cancel');
+  const cleanup=()=>{ mask.classList.remove('show'); confirmBtn.onclick=cancelBtn.onclick=null; };
+  confirmBtn.onclick=()=>{
+    const startX=B.x, startZ=B.z; cleanup(); dockGhost=null;
+    B.x=plan.x; B.z=plan.z; render(); save();
+    const conflicts=findChairConflicts(B).filter(c=>c.other===A); // в паре стыковки нас интересует только конфликт именно с A
+    if(conflicts.length){ showDockDialog(B,startX,startZ,conflicts,{
+      title:DOCK_TYPE_NAMES[plan.type]+' — конфликт стульев', other:A, gapDir:plan.dir,
+      afterRemove:()=>createGroupFromDock(A,B,plan), afterGap:()=>createGroupFromDock(A,B,plan) }); }
+    else createGroupFromDock(A,B,plan); };
+  cancelBtn.onclick=()=>{ cleanup(); dockGhost=null; render(); };
+}
+document.getElementById('dockbtn').addEventListener('click',()=>setDocking(!docking));
 // привязка (умные направляющие): центр, левый/правый край, торец-к-стороне (буквой Г) — по СТОЛЕШНИЦЕ,
 // финальный зазор от стульев соседа потом гарантирует resolve()
 function snap(t){ guides=[]; const TH=14; const et=halfExt(t); const GAP=300;
@@ -307,19 +596,30 @@ function snap(t){ guides=[]; const TH=14; const et=halfExt(t); const GAP=300;
 function svgPt(e){ const r=floor.getBoundingClientRect(); return {x:VB.x+(e.clientX-r.left)/r.width*VB.w, z:VB.z+(e.clientY-r.top)/r.height*VB.h}; }
 let drag=null, pan=null;
 floor.addEventListener('pointerdown',e=>{
+  if(!locked && docking){ const g=e.target.closest('g[data-id]'); if(g) pickDockTable(tables[+g.dataset.id]); return; }
   if(!locked){
     const chair=e.target.closest('[data-chair]');
     if(chair){ const t=tables[+chair.dataset.id], key=chair.dataset.side, slot=+chair.dataset.slot;
-      if(key==='seats'){ t.seats=Math.max(0,t.seats-1); }
+      if(key==='seats'){ const arr=t.gaps=(t.gaps||[]); const j=arr.indexOf(slot);
+        if(j>=0){ if(capVal(t,'seats')<physicalMax(t,'seats')){ arr.splice(j,1); if(overlapsOther(t)) arr.push(slot); } }
+        else arr.push(slot);
+        t.seats=Math.max(0,(t.seatSlots||0)-arr.length); }
       else { const arr=t.gaps[key]; const j=arr.indexOf(slot);
-        if(j>=0){ arr.splice(j,1); if(overlapsOther(t)) arr.push(slot); } // ставим стул обратно, только если там реально свободно
+        if(j>=0){ if(capVal(t,key)<physicalMax(t,key)){ arr.splice(j,1); if(overlapsOther(t)) arr.push(slot); } } // ставим стул обратно, только если там реально свободно и физически влезает
         else arr.push(slot); }
       render(); save(); return; }
     const og=e.target.closest('g[data-obj]'); if(og){ const o=objs.find(x=>x.id==og.dataset.obj); selObj=o.id; selected=null; const p=svgPt(e); drag={o,dx:o.x-p.x,dz:o.z-p.z}; floor.setPointerCapture(e.pointerId); render(); return; }
-    const g=e.target.closest('g[data-id]'); if(g){ const t=tables[+g.dataset.id]; selected=t; selObj=null; const p=svgPt(e); drag={t,dx:t.x-p.x,dz:t.z-p.z}; floor.setPointerCapture(e.pointerId); render(); return; }
+    const g=e.target.closest('g[data-id]'); if(g){ const t=tables[+g.dataset.id]; selObj=null; const p=svgPt(e);
+      const grp=groupOf(t);
+      if(grp){ // стол в группе — перетаскивание двигает ВСЮ группу как единое целое (ТЗ 3.6)
+        selectedGroup=grp; if(selected!==t) selected=null;
+        const orig=groupTables(grp).map(x=>({t:x,x0:x.x,z0:x.z}));
+        drag={groupDrag:true,group:grp,anchor:t,anchorX0:t.x,anchorZ0:t.z,dx:t.x-p.x,dz:t.z-p.z,orig,startX:t.x,startZ:t.z};
+      } else { selected=t; selectedGroup=null; drag={t,dx:t.x-p.x,dz:t.z-p.z,startX:t.x,startZ:t.z}; }
+      floor.setPointerCapture(e.pointerId); render(); return; }
   }
   // мимо всего — панорамирование поля (работает и при locked)
-  if(selected||selObj){selected=null;selObj=null;render();}
+  if(selected||selObj||selectedGroup){selected=null;selObj=null;selectedGroup=null;render();}
   const rect=floor.getBoundingClientRect();
   pan={sx:e.clientX,sy:e.clientY,vbx:VB.x,vbz:VB.z,pxPerCm:rect.width/VB.w};
   floor.setPointerCapture(e.pointerId); floor.classList.add('panning');
@@ -327,14 +627,30 @@ floor.addEventListener('pointerdown',e=>{
 floor.addEventListener('pointermove',e=>{
   if(pan){ VB.x=pan.vbx-(e.clientX-pan.sx)/pan.pxPerCm; VB.z=pan.vbz-(e.clientY-pan.sy)/pan.pxPerCm; render(); return; }
   if(!drag) return; const p=svgPt(e);
-  if(drag.o){ drag.o.x=p.x+drag.dx; drag.o.z=p.z+drag.dz; } else { drag.t.x=p.x+drag.dx; drag.t.z=p.z+drag.dz; snap(drag.t); resolve(drag.t); } render(); });
-floor.addEventListener('pointerup',()=>{ if(pan){ pan=null; floor.classList.remove('panning'); } if(drag){ drag=null; guides=[]; render(); save(); } });
+  // при перетаскивании раздвигаем только столешницы (физика, нарушать нельзя); конфликт
+  // стульев не раздвигаем молча — решается диалогом стыковки после отпускания (pointerup).
+  // Группа двигается целиком без снапа/раздвигания — она уже согласована сама с собой,
+  // а взаимодействие с ДРУГИМИ столами при перетаскивании группы — за рамками этого этапа
+  // (см. план, Этап 5): итоговое положение всё равно честно подсвечивается Этапом 3.
+  if(drag.o){ drag.o.x=p.x+drag.dx; drag.o.z=p.z+drag.dz; resolveObjBody(drag.o); }
+  else if(drag.groupDrag){ const newAx=p.x+drag.dx, newAz=p.z+drag.dz; const dx=newAx-drag.anchorX0, dz=newAz-drag.anchorZ0;
+    drag.orig.forEach(o=>{ o.t.x=o.x0+dx; o.t.z=o.z0+dz; }); }
+  else { drag.t.x=p.x+drag.dx; drag.t.z=p.z+drag.dz; snap(drag.t); resolveBodies(drag.t); } render(); });
+floor.addEventListener('pointerup',()=>{ if(pan){ pan=null; floor.classList.remove('panning'); }
+  if(drag){ const t=drag.t, startX=drag.startX, startZ=drag.startZ, wasGroup=drag.groupDrag; drag=null; guides=[]; render(); save();
+    if(t && !wasGroup){ const conflicts=findChairConflicts(t); if(conflicts.length) showDockDialog(t,startX,startZ,conflicts); } } });
 // зум колесом
 floor.addEventListener('wheel',e=>{ e.preventDefault(); const p=svgPt(e), f=e.deltaY>0?1.12:0.9; const nw=Math.max(500,Math.min(4000,VB.w*f)), nh=nw*VB.h/VB.w; VB.x=p.x-(p.x-VB.x)*nw/VB.w; VB.z=p.z-(p.z-VB.z)*nh/VB.h; VB.w=nw; VB.h=nh; render(); },{passive:false});
 
 // ---- инспектор ----
-const capVal=(t,k)=>Math.max(0,(t[k]||0)-(t.gaps[k]||[]).length);
-const hasGaps=t=> t.shape==='rect' && ['seatsA','seatsB','seatsE1','seatsE2'].some(k=>(t.gaps[k]||[]).length);
+const capVal=(t,k)=> k==='seats' ? Math.max(0,t.seats||0) : Math.max(0,(t[k]||0)-(t.gaps[k]||[]).length);
+const hasGaps=t=> t.shape==='rect' ? ['seatsA','seatsB','seatsE1','seatsE2'].some(k=>(t.gaps[k]||[]).length) : (t.gaps||[]).length>0;
+// физический лимит мест: длина стороны / (ширина стула + мин. зазор), для круглого — по хорде
+const sideLenFor=(t,k)=> (k==='seatsE1'||k==='seatsE2') ? t.hw*2 : t.hl*2;
+const physicalMax=(t,k)=> t.shape==='round' ? PG.getMaxRoundSeats(t.R*2) : PG.getMaxLinearSeats(sideLenFor(t,k));
+const capWarning=(t,k)=> t.shape==='round'
+  ? PG.getSeatCapacityWarning({shape:'round',diameter:t.R*2,occupied:t.seats})
+  : PG.getSeatCapacityWarning({shape:'rect',sideLength:sideLenFor(t,k),occupied:capVal(t,k)});
 // ---- мини-схема стола (вид сверху) в инспекторе: клик по стулу — убрать, по пунктирному ＋ — поставить именно сюда ----
 const SIDE_NAMES={seatsA:'Сторона 1',seatsB:'Сторона 2',seatsE1:'Торец 1',seatsE2:'Торец 2',seats:'Гости вокруг'};
 function dgChairs(n,x0,y0,W,H,side,hl,gaps,key){ let s=''; gaps=gaps||[];
@@ -348,9 +664,10 @@ function dgChairs(n,x0,y0,W,H,side,hl,gaps,key){ let s=''; gaps=gaps||[];
   return s; }
 function renderDiagram(t,hl){ const el=document.getElementById('i-diagram'); if(!el||!t) return;
   const cap=`<div class="dg-cap${hl?' hl':''}">${hl?SIDE_NAMES[hl]:(t.shape==='rect'?'Банкетный стол — наведите на строку':'Круглый стол')}</div>`;
-  if(t.shape!=='rect'){ const n=Math.max(t.seats||0,0),cx=90,cy=54,R=32; let ch='';
-    for(let i=0;i<n;i++){ const a=i/Math.max(n,1)*Math.PI*2-Math.PI/2, x=cx+Math.cos(a)*(R+12), y=cy+Math.sin(a)*(R+12);
-      ch+=`<circle class="dg-chair dg-click${hl==='seats'?' hl':''}" data-side="seats" data-slot="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5"/>`; }
+  if(t.shape!=='rect'){ const n=Math.max(t.seatSlots||0,0),cx=90,cy=54,R=32,gaps=t.gaps||[]; let ch='';
+    for(let i=0;i<n;i++){ const gapped=gaps.indexOf(i)>=0; const a=i/Math.max(n,1)*Math.PI*2-Math.PI/2, x=cx+Math.cos(a)*(R+12), y=cy+Math.sin(a)*(R+12);
+      const cls=gapped?'dg-chair dg-gap dg-click':('dg-chair dg-click'+(hl==='seats'?' hl':''));
+      ch+=`<circle class="${cls}" data-side="seats" data-slot="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5"/>`; }
     const ring=hl==='seats'?`<circle class="dg-edge" cx="${cx}" cy="${cy}" r="${R}" fill="none"/>`:'';
     el.innerHTML=`<svg viewBox="0 0 180 108"><circle class="dg-table" cx="${cx}" cy="${cy}" r="${R}"/>${ring}${ch}</svg>`+cap; return; }
   const a=t.seatsA||0, b=t.seatsB||0, e1=t.seatsE1||0, e2=t.seatsE2||0;
@@ -365,60 +682,118 @@ function renderDiagram(t,hl){ const el=document.getElementById('i-diagram'); if(
     +dgChairs(e1,x0,y0,W,H,'right',hl==='seatsE1',G.seatsE1,'seatsE1')+dgChairs(e2,x0,y0,W,H,'left',hl==='seatsE2',G.seatsE2,'seatsE2')
     +`</svg>`+cap;
 }
+// Показываем ровно одну панель: инспектор стола (#insp) или инспектор группы (#ginsp).
+// selected — конкретный стол в фокусе (в т.ч. открытый изнутри группы для правки стульев);
+// selectedGroup — вся группа выбрана целиком (без конкретного стола в фокусе).
+function updatePanels(){
+  if(selected && !locked){ document.getElementById('ginsp').style.display='none'; renderInsp(); return; }
+  if(selectedGroup && !locked && groups.indexOf(selectedGroup)>=0){ document.getElementById('insp').style.display='none'; renderGroupInsp(); return; }
+  document.getElementById('insp').style.display='none';
+  document.getElementById('ginsp').style.display='none';
+}
 function renderInsp(){ const box=document.getElementById('insp'), t=selected;
   if(!t||locked){ box.style.display='none'; return; } box.style.display='block';
+  const back=document.getElementById('i-backgroup'), grp=groupOf(t);
+  back.style.display = grp ? 'block' : 'none';
+  if(grp) document.getElementById('i-backgroup-nm').textContent = gname(grp);
   document.getElementById('i-name').value=tname(t);
   document.getElementById('i-sub').textContent=tsize(t)+' · '+seatCount(t)+' мест';
   document.getElementById('i-seatlabel').textContent = t.shape==='rect' ? 'Стулья по сторонам' : 'Гости за столом';
-  const row=(l,k,v)=>`<div class="row" data-key="${k}"><span>${l}</span><button data-cap="${k}" data-d="-1">−</button><b>${v}</b><button data-cap="${k}" data-d="1">+</button></div>`;
+  const esc=s=>String(s).replace(/"/g,'&quot;');
+  const row=(l,k,v)=>{ const atMax=v>=physicalMax(t,k), warn=atMax?capWarning(t,k):null;
+    return `<div class="row" data-key="${k}"><span>${l}</span><button data-cap="${k}" data-d="-1">−</button><b>${v}</b><button data-cap="${k}" data-d="1"${atMax?` disabled title="${esc(warn)}"`:''}>+</button></div>`
+      + (warn?`<div class="capwarn">${esc(warn)}</div>`:''); };
   document.getElementById('i-rows').innerHTML = t.shape==='round'
     ? row('Гостей','seats',t.seats)
     : row('Сторона 1','seatsA',capVal(t,'seatsA'))+row('Сторона 2','seatsB',capVal(t,'seatsB'))+row('Торец 1','seatsE1',capVal(t,'seatsE1'))+row('Торец 2','seatsE2',capVal(t,'seatsE2'));
-  document.getElementById('i-align').style.display=hasGaps(t)?'flex':'none';
+  const alignBtn=document.getElementById('i-align');
+  alignBtn.style.display=hasGaps(t)?'flex':'none';
+  alignBtn.lastChild.textContent = t.shape==='round' ? 'Распределить равномерно' : 'Выровнять · равные отступы';
   renderDiagram(t,null);
 }
+function renderGroupInsp(){ const box=document.getElementById('ginsp'), g=selectedGroup;
+  if(!g||locked){ box.style.display='none'; return; } box.style.display='block';
+  document.getElementById('gi-name').value=gname(g);
+  const ts=groupTables(g);
+  document.getElementById('gi-sub').textContent=`${ts.length} стола · ${groupCapacity(g)} мест всего`;
+  document.getElementById('gi-members').innerHTML = ts.map(t=>
+    `<button data-member="${t.id}"><span>${tname(t)}</span><b>${seatCount(t)} мест</b></button>`).join('');
+}
+document.getElementById('i-backgroup').addEventListener('click',()=>{ selected=null; render(); save(); });
+document.getElementById('gi-name').addEventListener('change',e=>{ if(selectedGroup){ selectedGroup.name=e.target.value.trim(); render(); save(); } });
+document.getElementById('gi-members').addEventListener('click',e=>{ const b=e.target.closest('button[data-member]'); if(!b)return;
+  const t=tables.find(x=>x.id===b.dataset.member); if(t){ selected=t; render(); save(); } });
+document.querySelectorAll('#ginsp .rotrow button').forEach(b=>b.addEventListener('click',()=>{ if(!selectedGroup)return;
+  rotateGroupAround(selectedGroup,(+b.dataset.grot)*Math.PI/4); render(); save(); }));
+document.getElementById('gi-center').addEventListener('click',()=>{ if(!selectedGroup)return; groupCenterOrigin(selectedGroup); render(); save(); });
+document.getElementById('gi-hrow').addEventListener('click',()=>{ if(!selectedGroup)return; groupAlignRow(selectedGroup); render(); save(); });
+document.getElementById('gi-vrow').addEventListener('click',()=>{ if(!selectedGroup)return; groupAlignColumn(selectedGroup); render(); save(); });
+document.getElementById('gi-ungroup').addEventListener('click',()=>{ if(!selectedGroup)return; ungroupNow(selectedGroup); render(); save(); });
 const iRows=document.getElementById('i-rows');
 iRows.addEventListener('pointerover',e=>{ const r=e.target.closest('[data-key]'); if(selected) renderDiagram(selected, r?r.dataset.key:null); r&&r.classList.add('hl'); });
 iRows.addEventListener('pointerout',e=>{ const r=e.target.closest('[data-key]'); r&&r.classList.remove('hl'); if(!e.relatedTarget||!e.relatedTarget.closest('#i-rows')){ if(selected) renderDiagram(selected,null); } });
 iRows.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b||!selected)return; const t=selected,k=b.dataset.cap,d=+b.dataset.d;
-  if(k==='seats'){ if(d>0){ const prev=t.seats; t.seats=Math.min(16,t.seats+d); if(overlapsOther(t)) t.seats=prev; } else t.seats=Math.max(2,t.seats+d); }
-  else if(d>0){ if(t.gaps[k].length){ t.gaps[k].sort((a,b)=>a-b); const slot=t.gaps[k].pop(); if(overlapsOther(t)) t.gaps[k].push(slot); }
-    else { const prev=t[k]||0; t[k]=Math.min(k.startsWith('seatsE')?2:12,prev+1); if(overlapsOther(t)) t[k]=prev; } }
+  if(k==='seats'){ const g=t.gaps=(t.gaps||[]); // круглый стол: фиксированные угловые слоты, как у сторон прямоугольного
+    if(d>0){ if(capVal(t,'seats')>=physicalMax(t,'seats')) return;
+      if(g.length){ g.sort((a,b)=>a-b); const slot=g.pop(); if(overlapsOther(t)) g.push(slot); }
+      else { t.seatSlots=(t.seatSlots||0)+1; if(overlapsOther(t)) t.seatSlots--; } }
+    else { const cap=t.seatSlots||0; for(let i=cap-1;i>=0;i--){ if(g.indexOf(i)<0){ g.push(i); break; } } }
+    t.seats=Math.max(0,(t.seatSlots||0)-g.length); }
+  else if(d>0){ if(capVal(t,k)>=physicalMax(t,k)) return; // физический лимит — кнопка и так должна быть disabled, это подстраховка
+    if(t.gaps[k].length){ t.gaps[k].sort((a,b)=>a-b); const slot=t.gaps[k].pop(); if(overlapsOther(t)) t.gaps[k].push(slot); }
+    else { const prev=t[k]||0; t[k]=prev+1; if(overlapsOther(t)) t[k]=prev; } }
   else { const cap=t[k]||0; for(let i=cap-1;i>=0;i--){ if(t.gaps[k].indexOf(i)<0){t.gaps[k].push(i);break;} } }
   render(); save(); });
-// клик прямо по мини-схеме: по стулу — убрать (дырка), по пустому пунктирному ＋ — поставить именно сюда
-// (если там теперь стоит соседний стол — не даём поставить, дырка остаётся)
+// клик прямо по мини-схеме: по стулу — убрать (дырка на конкретном месте), по пустому пунктирному ＋ — поставить именно сюда
+// (если там теперь стоит соседний стол — не даём поставить, дырка остаётся); одинаково для прямоугольного и круглого стола
 document.getElementById('i-diagram').addEventListener('click',e=>{
   const r=e.target.closest('[data-side]'); const t=selected; if(!r||!t) return;
   const key=r.dataset.side, slot=+r.dataset.slot;
-  if(key==='seats'){ t.seats=Math.max(0,t.seats-1); }
+  if(key==='seats'){ const g=t.gaps=(t.gaps||[]); const j=g.indexOf(slot);
+    if(j>=0){ if(capVal(t,'seats')>=physicalMax(t,'seats')) return; g.splice(j,1); if(overlapsOther(t)) g.push(slot); }
+    else g.push(slot);
+    t.seats=Math.max(0,(t.seatSlots||0)-g.length); }
   else { const g=t.gaps[key]=(t.gaps[key]||[]); const j=g.indexOf(slot);
-    if(j>=0){ g.splice(j,1); if(overlapsOther(t)) g.push(slot); } else g.push(slot); }
+    if(j>=0){ if(capVal(t,key)>=physicalMax(t,key)) return; g.splice(j,1); if(overlapsOther(t)) g.push(slot); } else g.push(slot); }
   render(); save();
 });
 document.querySelectorAll('.rotrow button').forEach(b=>b.addEventListener('click',()=>{ if(!selected)return; selected.rot+=(+b.dataset.rot)*Math.PI/4; resolve(selected); render(); save(); }));
 document.getElementById('i-name').addEventListener('change',e=>{ if(selected){ selected.name=e.target.value.trim(); render(); save(); } });
-document.getElementById('i-align').addEventListener('click',()=>{ const t=selected; if(!t)return; ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ t[k]-=t.gaps[k].length; t.gaps[k]=[]; }); render(); save(); });
-document.getElementById('i-del').addEventListener('click',()=>{ tables=tables.filter(x=>x!==selected); selected=null; render(); save(); });
-document.getElementById('i-dup').addEventListener('click',()=>{ if(!selected)return; const c=JSON.parse(JSON.stringify(selected)); c.x+=90;c.z+=90;c.name='';c.bouquets=[]; resolve(c); tables.push(c); selected=c; render(); save(); });
+document.getElementById('i-align').addEventListener('click',()=>{ const t=selected; if(!t)return;
+  if(t.shape==='round'){ // отдельное осознанное действие: сбросить фиксированные дырки и пересчитать слоты под текущих гостей
+    t.seatSlots=Math.max(0,(t.seatSlots||0)-(t.gaps||[]).length); t.gaps=[]; t.distributionMode='even'; t.seats=t.seatSlots; }
+  else { // «Выровнять» = закрыть дырки, не уменьшая физическую вместимость стороны:
+    // seatsA/B/E1/E2 — это число СЛОТОВ (не гостей), его трогать нельзя, иначе
+    // «выравнивание» тихо уменьшает вместимость (это была реальная ошибка).
+    // Занятые стулья и так распределяются по всей длине стороны через chairSlots().
+    ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ t.gaps[k]=[]; }); }
+  render(); save(); });
+document.getElementById('i-del').addEventListener('click',()=>{ const t=selected; const grp=t&&groupOf(t);
+  tables=tables.filter(x=>x!==selected); selected=null;
+  if(grp){ grp.tableIds=grp.tableIds.filter(id=>id!==t.id); if(grp.tableIds.length<2) ungroupNow(grp); }
+  render(); save(); });
+document.getElementById('i-dup').addEventListener('click',()=>{ if(!selected)return; const c=JSON.parse(JSON.stringify(selected)); c.id=genId(); c.groupId=null; c.x+=90;c.z+=90;c.name='';c.bouquets=[]; resolve(c); tables.push(c); selected=c; render(); save(); });
 // ---- тулбар ----
 document.getElementById('addsel').addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(!v)return; const p=v.split('-'); const cx=VB.x+VB.w/2+(Math.random()*200-100), cz=VB.z+VB.h/2+(Math.random()*200-100);
-  let t; if(p[0]==='round') t={shape:'round',x:cx,z:cz,rot:0,R:+p[1]/2,seats:+p[2],bouquets:[],settings:[]};
-  else { const L=+p[1],W=+p[2],n=Math.max(2,Math.round(L/48)); t={shape:'rect',x:cx,z:cz,rot:0,hl:L/2,hw:W/2,seatsA:n,seatsB:n,seatsE1:0,seatsE2:0,gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]},bouquets:[],settings:[]}; }
+  let t; if(p[0]==='round') t=newRoundTable(cx,cz,+p[1]/2,+p[2]);
+  else { const L=+p[1],W=+p[2],n=Math.max(2,Math.round(L/48)); t={id:genId(),shape:'rect',x:cx,z:cz,rot:0,hl:L/2,hw:W/2,seatsA:n,seatsB:n,seatsE1:0,seatsE2:0,gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]},bouquets:[],settings:[]}; }
   resolve(t); tables.push(t); selected=t; render(); save(); });
 document.getElementById('objsel').addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(!v)return; const d=OBJ[v]; objs.push({id:'o'+Date.now(),kind:v,x:VB.x+VB.w/2,z:VB.z+VB.h*0.72,rot:0,w:d.w,h:d.h,label:d.label,fill:d.fill,stroke:d.stroke}); render(); save(); });
 document.getElementById('preset').addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(!v)return; applyPreset(v); });
 document.getElementById('distbtn').addEventListener('click',function(){ showDist=!showDist; this.classList.toggle('on',showDist); render(); });
 document.getElementById('lockbtn').addEventListener('click',function(){ locked=!locked; this.classList.toggle('on',locked); if(locked){selected=null;selObj=null;} render(); save(); });
 document.getElementById('fitbtn').addEventListener('click',fitView);
-addEventListener('keydown',e=>{ if(e.key==='Delete'&&selObj){ objs=objs.filter(o=>o.id!==selObj); selObj=null; render(); save(); } });
+addEventListener('keydown',e=>{ if(e.key==='Delete'&&selObj){ objs=objs.filter(o=>o.id!==selObj); selObj=null; render(); save(); }
+  if(e.key==='Escape'&&docking) setDocking(false); });
 
 const R90=Math.PI/2;
 function applyPreset(v){
-  const R=(x,z,rot,cap,name)=>({shape:'rect',x,z,rot,hl:120,hw:45,seatsA:cap.A,seatsB:cap.B,seatsE1:cap.E1||0,seatsE2:cap.E2||0,gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]},name:name||'',bouquets:[],settings:[]});
-  const O=(x,z,seats)=>({shape:'round',x,z,rot:0,R:75,seats,bouquets:[],settings:[]});
-  if(v==='u') tables=[R(0,-150,0,{A:6,B:0},'Молодожёны'),R(-95,30,R90,{A:0,B:5}),R(95,30,R90,{A:5,B:0})];
-  else if(v==='head'){ tables=[R(0,-250,0,{A:6,B:0},'Президиум')]; for(let c=0;c<3;c++)for(let r=0;r<2;r++) tables.push(O((c-1)*330,60+r*330,8)); }
+  const R=(x,z,rot,cap,name)=>({id:genId(),shape:'rect',x,z,rot,hl:120,hw:45,seatsA:cap.A,seatsB:cap.B,seatsE1:cap.E1||0,seatsE2:cap.E2||0,gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]},name:name||'',bouquets:[],settings:[]});
+  const O=(x,z,seats)=>newRoundTable(x,z,75,seats);
+  // A:5 — физический максимум для стороны 240 см (hl=120) при текущем размере стула,
+  // раньше тут стояло A:6 — сам встроенный пресет нарушал лимит, введённый в Этапе 1
+  if(v==='u') tables=[R(0,-150,0,{A:5,B:0},'Молодожёны'),R(-95,30,R90,{A:0,B:5}),R(95,30,R90,{A:5,B:0})];
+  else if(v==='head'){ tables=[R(0,-250,0,{A:5,B:0},'Президиум')]; for(let c=0;c<3;c++)for(let r=0;r<2;r++) tables.push(O((c-1)*330,60+r*330,8)); }
   else if(v==='grid'){ tables=[]; for(let r=0;r<3;r++)for(let c=0;c<3;c++) tables.push(O((c-1)*330,(r-1)*330,8)); }
   else if(v==='rows'){ tables=[]; for(let i=0;i<3;i++) tables.push(R((i-1)*270,0,R90,{A:5,B:5})); }
   for(let pass=0;pass<3;pass++) tables.forEach(resolve); // подстраховка: стулья пресета нигде не пересекаются
@@ -432,7 +807,9 @@ function fitView(){ if(!tables.length && !objs.length){ VB={x:-650,z:-450,w:1300
   const rect=floor.getBoundingClientRect(), ar=rect.width/rect.height; let W=w,H=h; if(W/H>ar) H=W/ar; else W=H*ar;
   VB={x:cx-W/2,z:cz-H/2,w:W,h:H}; render();
 }
-load(); fitView();
+load();
+document.getElementById('lockbtn').classList.toggle('on',locked); // сохранённая блокировка после reload — кнопка должна сразу показывать активное состояние (было: только внутренний флаг, кнопка выглядела как выключенная)
+fitView();
 </script>
 </body>
 </html>
