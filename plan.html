@@ -229,11 +229,18 @@ function load(){
     t.bouquets=d.bouquets||[]; t.settings=d.settings||[];
     return t;
   });
-  objs = (readJSON(ROOM_KEY)||[]).map(o=>Object.assign({},o));
+  // Array.isArray — без нею битый/чужеродный JSON в этих двух ключах (не массив, а объект/
+  // число/строка — например, руками подправленный localStorage) валит .map с TypeError ещё
+  // ДО того, как отрисуется хоть что-то: план остаётся белым экраном без единой подсказки,
+  // а следующий save() тихо навсегда затирает объекты зала/группы пустым массивом. tables
+  // (выше) от этого уже защищён проверкой Array.isArray(h.tables) — здесь её не было.
+  const roomRaw=readJSON(ROOM_KEY);
+  objs = (Array.isArray(roomRaw)?roomRaw:[]).map(o=>Object.assign({},o));
   // группы: отбрасываем битые/неполные (нет id, <2 валидных столов) — иначе достаточно
   // руками подправить localStorage, чтобы получить группу-призрак без столов
   const byId={}; tables.forEach(t=>byId[t.id]=t);
-  groups = (readJSON(GROUPS_KEY)||[]).map(g=>Object.assign({},g)).filter(g=>{
+  const groupsRaw=readJSON(GROUPS_KEY);
+  groups = (Array.isArray(groupsRaw)?groupsRaw:[]).map(g=>Object.assign({},g)).filter(g=>{
     if(!g.id || !Array.isArray(g.tableIds)) return false;
     g.tableIds = g.tableIds.filter(id=>byId[id]);
     return g.tableIds.length>=2;
@@ -359,14 +366,21 @@ function render(){
   drawDefs(); drawGrid();
   guides.forEach(g=>{ floor.appendChild(g.axis==='x'?el('line',{x1:g.pos,y1:VB.z,x2:g.pos,y2:VB.z+VB.h,stroke:'#DB2777','stroke-width':2,'stroke-dasharray':'6 8',opacity:.8}):el('line',{x1:VB.x,y1:g.pos,x2:VB.x+VB.w,y2:g.pos,stroke:'#DB2777','stroke-width':2,'stroke-dasharray':'6 8',opacity:.8})); });
   // объекты зала (под столами)
-  objs.forEach(o=>{ const g=el('g',{transform:`translate(${o.x},${o.z}) rotate(${(o.rot||0)*180/Math.PI})`}); g.dataset.obj=o.id; g.style.cursor=locked?'default':'move';
+  objs.forEach(o=>{ const g=el('g',{transform:`translate(${o.x},${o.z}) rotate(${-(o.rot||0)*180/Math.PI})`}); g.dataset.obj=o.id; g.style.cursor=locked?'default':'move';
     const on=selObj===o.id;
     g.appendChild(el('rect',{x:-o.w/2,y:-o.h/2,width:o.w,height:o.h,rx:14,fill:o.fill,stroke:on?'#DB2777':o.stroke,'stroke-width':on?5:3,'stroke-dasharray':o.kind==='arch'?'10 8':'none'}));
     const tx=el('text',{x:0,y:11,'text-anchor':'middle','font-size':30,'font-weight':700,fill:'#7a6a55','pointer-events':'none'}); tx.textContent=o.label; g.appendChild(tx);
     floor.appendChild(g); });
   // столы
   tables.forEach(t=>{ const sel=selected===t; const g=el('g',{}); g.dataset.id=tables.indexOf(t); g.style.cursor=locked?'default':'move';
-    const body=el('g',{transform:`translate(${t.x},${t.z}) rotate(${t.rot*180/Math.PI})`});
+    // МИНУС перед углом: SVG rotate() крутит по часовой при +, а localToWorld (которым
+    // считаются позиции стульев — chairSlots/resolve/snap/докинг) — против часовой при +
+    // (z-flip конвенция, см. коммент у localToWorld). Без минуса видимый поворот
+    // столешницы и посчитанные позиции стульев расходятся в разные стороны при любом угле,
+    // не кратном 180° (проверено численно через реальную матрицу тела стола в браузере).
+    // Для круглых столов body — окружность, знак на неё визуально не влияет; их chairSlots
+    // и так считает cos/sin БЕЗ z-flip, то есть уже совпадает с этим же минусом.
+    const body=el('g',{transform:`translate(${t.x},${t.z}) rotate(${-t.rot*180/Math.PI})`});
     const top=el('g',{filter:'url(#tblShadow)'});
     if(t.shape==='round'){ if(sel) body.appendChild(el('circle',{r:t.R+12,fill:'none',stroke:'#DB2777','stroke-width':5})); top.appendChild(el('circle',{r:t.R,fill:'url(#tblGrad)',stroke:'#E7C4D5','stroke-width':4})); }
     else { if(sel) body.appendChild(el('rect',{x:-t.hl-12,y:-t.hw-12,width:t.hl*2+24,height:t.hw*2+24,rx:18,fill:'none',stroke:'#DB2777','stroke-width':5})); top.appendChild(el('rect',{x:-t.hl,y:-t.hw,width:t.hl*2,height:t.hw*2,rx:14,fill:'url(#tblGrad)',stroke:'#E7C4D5','stroke-width':4})); }
@@ -397,7 +411,7 @@ function render(){
     const gt=el('text',{x:0,y:6,'text-anchor':'middle','font-size':20,'font-weight':800,fill:'#A16207'}); gt.textContent='👥 '+gname(selectedGroup); gb.appendChild(gt);
     floor.appendChild(gb); }
   // ghost-preview будущего положения стола B при стыковке (ТЗ 3.5, пункт 4)
-  if(dockGhost){ const dg=dockGhost, gg=el('g',{transform:`translate(${dg.x},${dg.z}) rotate(${dg.rot*180/Math.PI})`,opacity:.55});
+  if(dockGhost){ const dg=dockGhost, gg=el('g',{transform:`translate(${dg.x},${dg.z}) rotate(${-dg.rot*180/Math.PI})`,opacity:.55});
     if(dg.shape==='round') gg.appendChild(el('circle',{r:dg.R,fill:'#FCE7F3',stroke:'#DB2777','stroke-width':3,'stroke-dasharray':'10 6'}));
     else gg.appendChild(el('rect',{x:-dg.hl,y:-dg.hw,width:dg.hl*2,height:dg.hw*2,rx:14,fill:'#FCE7F3',stroke:'#DB2777','stroke-width':3,'stroke-dasharray':'10 6'}));
     floor.appendChild(gg); }
@@ -689,7 +703,7 @@ function showDockDialog(t,startX,startZ,conflicts,opts){ opts=opts||{};
   const mask=document.getElementById('dockmask');
   document.getElementById('dockttl').textContent = opts.title || 'Стыковка невозможна';
   document.getElementById('dockmsg').textContent = opts.message || 'Стулья на обращённых сторонах занимают контактную зону. Что сделать?';
-  const lines=conflicts.slice(0,6).map(c=>`${tname(t)} / ${dispSide(c.a.side)}${c.a.slot>=0?' / место '+(c.a.slot+1):''} ↔ ${tname(c.other)} / ${dispSide(c.b.side)}${c.b.slot>=0?' / место '+(c.b.slot+1):''}`);
+  const lines=conflicts.slice(0,6).map(c=>`${tname(c.owner||t)} / ${dispSide(c.a.side)}${c.a.slot>=0?' / место '+(c.a.slot+1):''} ↔ ${tname(c.other)} / ${dispSide(c.b.side)}${c.b.slot>=0?' / место '+(c.b.slot+1):''}`);
   document.getElementById('dockconf').innerHTML = (conflicts.length>1?`<b>${conflicts.length} конфликта</b><br>`:'') + lines.join('<br>');
   mask.classList.add('show');
   const removeBtn=document.getElementById('dock-remove'), gapBtn=document.getElementById('dock-gap'), apartBtn=document.getElementById('dock-apart'), cancelBtn=document.getElementById('dock-cancel');
@@ -697,7 +711,10 @@ function showDockDialog(t,startX,startZ,conflicts,opts){ opts=opts||{};
   // второй стол и направление докинга) — при обычном перетаскивании (Этап 4) кнопка скрыта.
   gapBtn.style.display = opts.other ? 'flex' : 'none';
   const cleanup=()=>{ mask.classList.remove('show'); removeBtn.onclick=gapBtn.onclick=apartBtn.onclick=cancelBtn.onclick=null; };
-  removeBtn.onclick=()=>{ conflicts.forEach(c=>{ addGapAt(t,c.a.side,c.a.slot); addGapAt(c.other,c.b.side,c.b.slot); }); cleanup(); render(); save(); if(opts.afterRemove) opts.afterRemove(); };
+  // c.owner — какому именно столу принадлежит место c.a (по умолчанию тот же t, что и раньше;
+  // при перетаскивании ГРУППЫ конфликты могут идти от РАЗНЫХ столов группы, каждый со своим owner —
+  // без этого дырка ставилась бы всегда на t, а не на реального владельца конфликтующего стула).
+  removeBtn.onclick=()=>{ conflicts.forEach(c=>{ addGapAt(c.owner||t,c.a.side,c.a.slot); addGapAt(c.other,c.b.side,c.b.slot); }); cleanup(); render(); save(); if(opts.afterRemove) opts.afterRemove(); };
   gapBtn.onclick=()=>{ if(opts.gapDir){ t.x+=opts.gapDir.x*80; t.z+=opts.gapDir.z*80; } cleanup(); render(); save(); if(opts.afterGap) opts.afterGap(); };
   apartBtn.onclick=()=>{ t.x=startX; t.z=startZ; cleanup(); render(); save(); if(opts.afterApart) opts.afterApart(); };
   cancelBtn.onclick=()=>{ cleanup(); render(); save(); if(opts.afterCancel) opts.afterCancel(); };
@@ -767,6 +784,16 @@ function snap(t){ guides=[]; const TH=14; const et=halfExt(t); const GAP=300;
 // ---- события ----
 function svgPt(e){ const r=floor.getBoundingClientRect(); return {x:VB.x+(e.clientX-r.left)/r.width*VB.w, z:VB.z+(e.clientY-r.top)/r.height*VB.h}; }
 let drag=null, pan=null;
+// pointermove на реальной мыши может тикать чаще, чем экран обновляется — раньше render()
+// (полная переборка SVG: перерисовка сетки, всех столов+стульев, всех зазоров) звалась
+// СИНХРОННО на каждое такое событие. При 25-30 столах один такой render() — уже 20-30 мс,
+// то есть дороже одного кадра при 60 fps — таскание стола реально подтормаживало. rAF-батчинг
+// не меняет логику (позиции/snap/resolve по-прежнему считаются на каждый pointermove сразу,
+// иначе перетаскивание начнёт «отставать» от курсора) — откладывает только САМУ перерисовку
+// DOM до следующего кадра, схлопывая несколько pointermove в одну перерисовку.
+let renderScheduled=false;
+function scheduleRender(){ if(renderScheduled) return; renderScheduled=true;
+  requestAnimationFrame(()=>{ renderScheduled=false; render(); }); }
 floor.addEventListener('pointerdown',e=>{
   if(!locked && docking){ const g=e.target.closest('g[data-id]'); if(g) pickDockTable(tables[+g.dataset.id]); return; }
   if(!locked){
@@ -797,7 +824,7 @@ floor.addEventListener('pointerdown',e=>{
   floor.setPointerCapture(e.pointerId); floor.classList.add('panning');
 });
 floor.addEventListener('pointermove',e=>{
-  if(pan){ VB.x=pan.vbx-(e.clientX-pan.sx)/pan.pxPerCm; VB.z=pan.vbz-(e.clientY-pan.sy)/pan.pxPerCm; render(); return; }
+  if(pan){ VB.x=pan.vbx-(e.clientX-pan.sx)/pan.pxPerCm; VB.z=pan.vbz-(e.clientY-pan.sy)/pan.pxPerCm; scheduleRender(); return; }
   if(!drag) return; const p=svgPt(e);
   // при перетаскивании раздвигаем только столешницы (физика, нарушать нельзя); конфликт
   // стульев не раздвигаем молча — решается диалогом стыковки после отпускания (pointerup).
@@ -807,10 +834,23 @@ floor.addEventListener('pointermove',e=>{
   if(drag.o){ drag.o.x=p.x+drag.dx; drag.o.z=p.z+drag.dz; resolveObjBody(drag.o); }
   else if(drag.groupDrag){ const newAx=p.x+drag.dx, newAz=p.z+drag.dz; const dx=newAx-drag.anchorX0, dz=newAz-drag.anchorZ0;
     drag.orig.forEach(o=>{ o.t.x=o.x0+dx; o.t.z=o.z0+dz; }); }
-  else { drag.t.x=p.x+drag.dx; drag.t.z=p.z+drag.dz; snap(drag.t); resolveBodies(drag.t); } render(); });
+  else { drag.t.x=p.x+drag.dx; drag.t.z=p.z+drag.dz; snap(drag.t); resolveBodies(drag.t); } scheduleRender(); });
 floor.addEventListener('pointerup',()=>{ if(pan){ pan=null; floor.classList.remove('panning'); }
-  if(drag){ const t=drag.t, startX=drag.startX, startZ=drag.startZ, wasGroup=drag.groupDrag; drag=null; guides=[]; render(); save();
-    if(t && !wasGroup){ const conflicts=findChairConflicts(t); if(conflicts.length) showDockDialog(t,startX,startZ,conflicts); } } });
+  if(drag){ const t=drag.t, startX=drag.startX, startZ=drag.startZ, wasGroup=drag.groupDrag, group=drag.group, orig=drag.orig; drag=null; guides=[]; render(); save();
+    if(t && !wasGroup){ const conflicts=findChairConflicts(t); if(conflicts.length) showDockDialog(t,startX,startZ,conflicts); }
+    // Группа двигается целиком (см. комментарий у pointermove) — но соседей СНАРУЖИ группы
+    // она может задеть, и раньше это тихо проходило без единого предупреждения. Собираем
+    // конфликты со всех столов группы разом (не только с «якорного», за который тащили),
+    // отфильтровав конфликты МЕЖДУ своими же — пара, ради которой группу и создали, обычно
+    // и стоит впритык, это не конфликт. Кнопка «Создать зазор» тут не показывается (нет
+    // единого «второго стола» стыковки) — только «убрать стулья» / «раздвинуть обратно».
+    else if(wasGroup && group){ const memberIds={}; groupTables(group).forEach(m=>memberIds[m.id]=true);
+      const allConflicts=[]; groupTables(group).forEach(m=>{ findChairConflicts(m).forEach(c=>{ if(!memberIds[c.other.id]) allConflicts.push(Object.assign({owner:m},c)); }); });
+      if(allConflicts.length){ const owner=allConflicts[0].owner;
+        showDockDialog(owner,owner.x,owner.z,allConflicts,{
+          title:'Перетаскивание группы — конфликт стульев',
+          message:'Стулья группы задевают соседний стол. Что сделать?',
+          afterApart:()=>{ orig.forEach(o=>{ o.t.x=o.x0; o.t.z=o.z0; }); render(); save(); } }); } } } });
 // зум колесом
 floor.addEventListener('wheel',e=>{ e.preventDefault(); const p=svgPt(e), f=e.deltaY>0?1.12:0.9; const nw=Math.max(500,Math.min(4000,VB.w*f)), nh=nw*VB.h/VB.w; VB.x=p.x-(p.x-VB.x)*nw/VB.w; VB.z=p.z-(p.z-VB.z)*nh/VB.h; VB.w=nw; VB.h=nh; render(); },{passive:false});
 
@@ -939,7 +979,17 @@ document.getElementById('i-diagram').addEventListener('click',e=>{
     if(j>=0){ if(capVal(t,key)>=physicalMax(t,key)) return; g.splice(j,1); if(overlapsOther(t)) g.push(slot); } else g.push(slot); }
   render(); save();
 });
-document.querySelectorAll('.rotrow button').forEach(b=>b.addEventListener('click',()=>{ if(!selected)return; selected.rot+=(+b.dataset.rot)*Math.PI/4; resolveFull(selected); render(); save(); }));
+document.querySelectorAll('#insp .rotrow button').forEach(b=>b.addEventListener('click',()=>{ if(!selected)return;
+  const delta=(+b.dataset.rot)*Math.PI/4, grp=groupOf(selected);
+  // Стол в группе (созданной стыковкой — партнёры стоят ВПЛОТНУЮ друг к другу) нельзя
+  // крутить в одиночку через инспектор конкретного стола: resolveFull() у одного стола не
+  // знает про партнёра как про «единое целое», при повороте у него появляются конфликты
+  // стульев с соседом, и его просто отталкивает от группы (был баг: «Копия» стола выпадала
+  // из состыкованной пары на десятки-сотни см, бейдж группы оставался как ни в чём не бывало).
+  // Поэтому вместо одиночного stola.rot вращаем ВСЮ группу вокруг её общего центра —
+  // тем же вызовом, что и кнопки в #ginsp .rotrow — так пара остаётся состыкованной.
+  if(grp){ rotateGroupAround(grp,delta); } else { selected.rot+=delta; resolveFull(selected); }
+  render(); save(); }));
 document.getElementById('i-name').addEventListener('change',e=>{ if(selected){ selected.name=e.target.value.trim(); render(); save(); } });
 document.getElementById('i-align').addEventListener('click',()=>{ const t=selected; if(!t)return;
   // «Выровнять» = равномерно разложить ИМЕННО ЗАНЯТЫЕ стулья по всей длине стороны, убрав
