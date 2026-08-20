@@ -790,8 +790,10 @@ const R90=Math.PI/2;
 function applyPreset(v){
   const R=(x,z,rot,cap,name)=>({id:genId(),shape:'rect',x,z,rot,hl:120,hw:45,seatsA:cap.A,seatsB:cap.B,seatsE1:cap.E1||0,seatsE2:cap.E2||0,gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]},name:name||'',bouquets:[],settings:[]});
   const O=(x,z,seats)=>newRoundTable(x,z,75,seats);
-  if(v==='u') tables=[R(0,-150,0,{A:6,B:0},'Молодожёны'),R(-95,30,R90,{A:0,B:5}),R(95,30,R90,{A:5,B:0})];
-  else if(v==='head'){ tables=[R(0,-250,0,{A:6,B:0},'Президиум')]; for(let c=0;c<3;c++)for(let r=0;r<2;r++) tables.push(O((c-1)*330,60+r*330,8)); }
+  // A:5 — физический максимум для стороны 240 см (hl=120) при текущем размере стула,
+  // раньше тут стояло A:6 — сам встроенный пресет нарушал лимит, введённый в Этапе 1
+  if(v==='u') tables=[R(0,-150,0,{A:5,B:0},'Молодожёны'),R(-95,30,R90,{A:0,B:5}),R(95,30,R90,{A:5,B:0})];
+  else if(v==='head'){ tables=[R(0,-250,0,{A:5,B:0},'Президиум')]; for(let c=0;c<3;c++)for(let r=0;r<2;r++) tables.push(O((c-1)*330,60+r*330,8)); }
   else if(v==='grid'){ tables=[]; for(let r=0;r<3;r++)for(let c=0;c<3;c++) tables.push(O((c-1)*330,(r-1)*330,8)); }
   else if(v==='rows'){ tables=[]; for(let i=0;i<3;i++) tables.push(R((i-1)*270,0,R90,{A:5,B:5})); }
   for(let pass=0;pass<3;pass++) tables.forEach(resolve); // подстраховка: стулья пресета нигде не пересекаются
@@ -805,7 +807,9 @@ function fitView(){ if(!tables.length && !objs.length){ VB={x:-650,z:-450,w:1300
   const rect=floor.getBoundingClientRect(), ar=rect.width/rect.height; let W=w,H=h; if(W/H>ar) H=W/ar; else W=H*ar;
   VB={x:cx-W/2,z:cz-H/2,w:W,h:H}; render();
 }
-load(); fitView();
+load();
+document.getElementById('lockbtn').classList.toggle('on',locked); // сохранённая блокировка после reload — кнопка должна сразу показывать активное состояние (было: только внутренний флаг, кнопка выглядела как выключенная)
+fitView();
 </script>
 </body>
 </html>
