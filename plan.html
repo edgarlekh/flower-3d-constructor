@@ -386,8 +386,16 @@ function render(){
       // разворачивается ТОЧНО как стол — ряд выглядит опрятно при любом угле, не только
       // при кратных 90°.
       const cg=el('g',{transform:`translate(${c.x},${c.z}) rotate(${(c.rot||0)*180/Math.PI})`}); cg.style.cursor='pointer'; cg.dataset.id=tables.indexOf(t); cg.dataset.side=c.side; cg.dataset.slot=c.slot; cg.dataset.chair='1';
-      if(c.gapped){ cg.appendChild(el('rect',{x:-20,y:-20,width:40,height:40,rx:8,fill:'#fff',stroke:'#DB2777','stroke-width':4,'stroke-dasharray':'8 6'})); cg.appendChild(el('path',{d:'M0 -11V11 M-11 0H11',stroke:'#DB2777','stroke-width':5,'stroke-linecap':'round'})); }
-      else { cg.appendChild(el('rect',{x:-20,y:-22,width:40,height:32,rx:6,fill:'#F7E1EC',stroke:'#E3AEC9','stroke-width':3})); cg.appendChild(el('rect',{x:-20,y:6,width:40,height:12,rx:4,fill:'#EBC7DA'})); }
+      // Марка стула — сильно скруглённый квадрат (rx почти в треть ширины), а не резкий
+      // прямоугольник «сиденье+спинка» в два тона: у резкого прямоугольника, повёрнутого на
+      // произвольный угол (не кратный 90°), каждый острый угол торчит в свою сторону — глазу
+      // это читается как «стулья вразнобой», даже когда координаты и поворот математически
+      // идеально точны (юзер прислал именно такой скрин с реального сайта — позиции сверял
+      // числом, они верны, дело было чисто в форме иконки). Сильно скруглённый квадрат почти
+      // не меняет силуэт при повороте — ряд читается опрятно на любом угле, не только 0/90°.
+      // Направление «спинки» — тонкая дуга у внешнего края, а не целый закрашенный блок.
+      if(c.gapped){ cg.appendChild(el('rect',{x:-19,y:-19,width:38,height:38,rx:13,fill:'#fff',stroke:'#DB2777','stroke-width':4,'stroke-dasharray':'8 6'})); cg.appendChild(el('path',{d:'M0 -11V11 M-11 0H11',stroke:'#DB2777','stroke-width':5,'stroke-linecap':'round'})); }
+      else { cg.appendChild(el('rect',{x:-19,y:-19,width:38,height:38,rx:13,fill:'#F7E1EC',stroke:'#E3AEC9','stroke-width':3})); cg.appendChild(el('path',{d:'M-12 11 Q0 17 12 11',stroke:'#D9A9C4','stroke-width':3,'stroke-linecap':'round',fill:'none'})); }
       g.appendChild(cg); });
     floor.appendChild(g); });
   // рамка выбранной группы столов — по реальному OBB-охвату (не по AABB одного стола)
