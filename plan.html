@@ -59,6 +59,11 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(130% 10
 .insp .row button:disabled{opacity:.35;cursor:not-allowed}
 .insp .row button:disabled:hover{border-color:var(--line);color:var(--ink)}
 .insp .capwarn{margin:-2px 14px 6px;font-size:10.5px;line-height:1.35;color:#b6355a;font-weight:600}
+/* превью зазора между стульями при разном числе мест — видно, но не мешает: мелкий серый
+   текст под строкой, число выделено, а тесный (<5см) зазор подсвечен красным */
+.insp .spprev{margin:-2px 14px 6px;font-size:9.5px;line-height:1.5;color:var(--ink2);white-space:normal;cursor:default}
+.insp .spprev b{font-weight:700;color:var(--ink)}
+.insp .spprev b.sp-bad{color:#b6355a}
 /* мини-схема стола: клик по стулу — убрать, по пунктирному ＋ — поставить именно сюда */
 .dg{display:flex;flex-direction:column;align-items:center;padding:6px 10px 2px}
 .dg svg{width:100%;max-width:196px;height:auto}
@@ -263,14 +268,16 @@ function chairSlots(t){ const out=[];
   const long=(k,sg)=>{ const n=t[k]||0; for(let i=0;i<n;i++){ const gp=(t.gaps[k]||[]).indexOf(i)>=0; const [x,z]=localToWorld(t,-t.hl+(i+0.5)/n*(2*t.hl), sg*(t.hw+CH)); out.push({x,z,gapped:gp,side:k,slot:i,rot:t.rot+(sg>0?Math.PI/2:-Math.PI/2)}); } };
   const end=(k,sg)=>{ const n=t[k]||0; for(let i=0;i<n;i++){ const gp=(t.gaps[k]||[]).indexOf(i)>=0; const [x,z]=localToWorld(t,sg*(t.hl+CH), -t.hw+(i+0.5)/n*(2*t.hw)); out.push({x,z,gapped:gp,side:k,slot:i,rot:t.rot}); } };
   long('seatsA',1); long('seatsB',-1); end('seatsE1',1); end('seatsE2',-1); return out; }
-// Пары ФИЗИЧЕСКИ соседних (по факту стоящих рядом) занятых стульев одного стола —
-// для прямоугольного это соседи по одной стороне (порядок slot уже по возрастанию),
-// для круглого — по кольцу, включая замыкающую пару последний-первый.
-function sameTableNeighborPairs(t){ const occ=chairSlots(t).filter(c=>!c.gapped), pairs=[];
-  if(t.shape==='round'){ if(occ.length>=2) for(let i=0;i<occ.length;i++) pairs.push([occ[i], occ[(i+1)%occ.length]]); return pairs; }
-  ['seatsA','seatsB','seatsE1','seatsE2'].forEach(side=>{ const s=occ.filter(c=>c.side===side);
-    for(let i=0;i<s.length-1;i++) pairs.push([s[i], s[i+1]]); });
-  return pairs; }
+// Пары ФИЗИЧЕСКИ соседних (по факту стоящих рядом) занятых стульев одного стола,
+// сгруппированные по «рядам»: для прямоугольного каждая сторона — свой ряд (порядок slot
+// уже по возрастанию), для круглого — один ряд по кольцу, включая замыкающую пару
+// последний-первый. Группировка по рядам нужна, чтобы решить, где зазор «одинаковый везде»
+// (один ряд — один вывод), а где отличается только в одном месте (см. showDist в render()).
+function sameTableRuns(t){ const occ=chairSlots(t).filter(c=>!c.gapped);
+  if(t.shape==='round'){ if(occ.length<2) return []; const pairs=[];
+    for(let i=0;i<occ.length;i++) pairs.push([occ[i], occ[(i+1)%occ.length]]); return [pairs]; }
+  return ['seatsA','seatsB','seatsE1','seatsE2'].map(side=>{ const s=occ.filter(c=>c.side===side), pairs=[];
+    for(let i=0;i<s.length-1;i++) pairs.push([s[i], s[i+1]]); return pairs; }).filter(p=>p.length); }
 function halfExt(t){ if(t.shape==='round') return {hx:t.R,hy:t.R}; const c=Math.abs(Math.cos(t.rot)),s=Math.abs(Math.sin(t.rot)); return {hx:t.hl*c+t.hw*s, hy:t.hl*s+t.hw*c}; }
 const tname=t=> t.name || ('Стол №'+(tables.indexOf(t)+1));
 const tsize=t=> t.shape==='round'? ('⌀ '+(t.R*2)+' см') : (t.hl*2+'×'+t.hw*2+' см');
@@ -402,33 +409,90 @@ function render(){
     const s=(maxLen>avail && maxLen>0)?Math.max(0.6,avail/maxLen):1;
     grp.setAttribute('transform',`translate(${t.x},${t.z}) rotate(${labelRot}) scale(${s})`); });
   // объединённые столы — сумма гостей
-  clusters().forEach(cl=>{ if(cl.length<2) return; const total=cl.reduce((s,t)=>s+seatCount(t),0); let minZ=1e9,minX=1e9,maxX=-1e9; cl.forEach(t=>{const e=halfExt(t); minZ=Math.min(minZ,t.z-e.hy); minX=Math.min(minX,t.x);maxX=Math.max(maxX,t.x);});
-    const g=el('g',{transform:`translate(${(minX+maxX)/2},${minZ-56})`}); const w=270;
+  // «Вместе: N» — только для случайно сблизившихся столов БЕЗ подтверждённой группы;
+  // у настоящей группы (Этап 5) уже есть свой бейдж с именем — не дублируем два ярлыка
+  // друг над другом на одном месте (просили: подписи не должны друг на друга залезать).
+  // labelZones — все занятые «подписями» зоны на плане (стол + вынос стульев, «Вместе: N»)
+  // — плашки зазоров ниже обязаны их огибать, а не просто друг друга.
+  const labelZones=tables.map(t=>{ const e=halfExt(t); return {x:t.x,z:t.z,hw:e.hx+PG.CHAIR_WIDTH+CH+4,hh:e.hy+PG.CHAIR_WIDTH+CH+4}; });
+  clusters().forEach(cl=>{ if(cl.length<2) return;
+    const sameGroup = cl.every(t=>t.groupId && t.groupId===cl[0].groupId);
+    if(sameGroup) return; // у подтверждённой группы уже есть свой бейдж с именем — не дублируем
+    const total=cl.reduce((s,t)=>s+seatCount(t),0); let minZ=1e9,minX=1e9,maxX=-1e9; cl.forEach(t=>{const e=halfExt(t); minZ=Math.min(minZ,t.z-e.hy); minX=Math.min(minX,t.x);maxX=Math.max(maxX,t.x);});
+    const cx=(minX+maxX)/2, cz=minZ-56, w=270;
+    const g=el('g',{transform:`translate(${cx},${cz})`});
     g.appendChild(el('rect',{x:-w/2,y:-24,width:w,height:48,rx:24,fill:'#FBF3DD',stroke:'#E4C98A','stroke-width':3}));
-    const tx=el('text',{x:0,y:9,'text-anchor':'middle','font-size':28,'font-weight':800,fill:'#A16207'}); tx.textContent='Вместе: '+total+' гостей'; g.appendChild(tx); floor.appendChild(g); });
-  // зазоры между стульями — реальный edge-to-edge зазор через PlanGeometry, а не
-  // «расстояние между центрами минус 45», обрезанное до 0. Перекрытие показывается
-  // как «Перекрытие N см» (не «0 см») — см. Этап 3 плана.
+    const tx=el('text',{x:0,y:9,'text-anchor':'middle','font-size':28,'font-weight':800,fill:'#A16207'}); tx.textContent='Вместе: '+total+' гостей'; g.appendChild(tx); floor.appendChild(g);
+    labelZones.push({x:cx,z:cz,hw:w/2+6,hh:30}); });
+  // зазоры между стульями — реальный edge-to-edge зазор через PlanGeometry, а не «расстояние
+  // между центрами минус 45», обрезанное до 0. Перекрытие показывается как «Перекрытие N см»
+  // (не «0 см») — см. Этап 3 плана. Два разных смысла зазора рисуются по-разному:
+  //  - между РАЗНЫМИ столами — «проход» между группами гостей (яркая плашка, красная при
+  //    тесноте <50 см) — как и раньше, одна плашка на весь стык (ближайшая пара), не спамим.
+  //  - между стульями ОДНОГО стола — «сколько см между соседями» — раньше не показывалось
+  //    вовсе (только реальное пересечение). Юзер попросил показывать это как информацию, но
+  //    без стены одинаковых чисел: если зазор одинаковый по всему ряду — ОДНА подпись по
+  //    центру ряда; если где-то отличается (обычно там, где убран стул — там зазор вдвое
+  //    шире) — отдельная подпись именно в этом месте, соседние одинаковые участки остаются
+  //    свёрнутыми в одну. Порог «тревога» для этой подписи — только настоящее пересечение
+  //    (0 см), а не общий 50-сантиметровый «проход» между разными столами: 5–15 см между
+  //    соседними стульями за одним столом — это нормально и не повод красить тревогой.
   if(showDist){ const occ=t=>chairSlots(t).filter(c=>!c.gapped);
     const half=PG.CHAIR_WIDTH/2;
     const chairRect=(tbl,c)=>({id:tbl.id+'#'+c.side+'#'+c.slot, x:c.x, z:c.z, rot:0, hx:half, hy:half});
-    const drawGap=(ax,az,bx,bz,result)=>{ const mx=(ax+bx)/2,mz=(az+bz)/2, bad=result.severity!=='ok', label=PG.formatClearance(result);
-      floor.appendChild(el('line',{x1:ax,y1:az,x2:bx,y2:bz,stroke:bad?'#d64562':'#C99BB5','stroke-width':bad?5:3}));
+    // Плашки зазоров не должны залезать друг на друга, на стулья/подписи столов — при тесной
+    // стыковке рядом легко оказывается сразу несколько таких зон. Ищем свободное место
+    // расширяющимся кольцом кандидатов вокруг «сырой» середины (не только по вертикали —
+    // при плотной ГОРИЗОНТАЛЬНОЙ стыковке столов сдвиг только по Z иногда некуда деть).
+    const placedBadges=tables.map(t=>{ const e=halfExt(t); return {x:t.x,z:t.z,hw:e.hx+8,hh:e.hy+8}; }).concat(labelZones);
+    const noOverlap=(x,z,hw,hh)=>placedBadges.every(p=>!(Math.abs(p.x-x)<hw+(p.hw!=null?p.hw:hw) && Math.abs(p.z-z)<hh+(p.hh!=null?p.hh:hh)));
+    const freeSpot=(x,z,hw,hh)=>{ if(noOverlap(x,z,hw,hh)) return {x,z};
+      const stepX=hw*2+6, stepZ=hh*2+6;
+      for(let r=1;r<=9;r++){ const cands=[[0,r],[0,-r],[1,0],[-1,0],[1,r],[-1,r],[1,-r],[-1,-r]].map(([ox,oz])=>({x:x+ox*stepX,z:z+oz*stepZ}));
+        for(const c of cands) if(noOverlap(c.x,c.z,hw,hh)) return c; }
+      return {x,z}; };
+    // muted — приглушённая уменьшенная плашка для «информационных» подписей (зазор внутри
+    // одного стола, когда он в порядке): не тревога, а спокойная серая подсказка с числом.
+    const drawGap=(ax,az,bx,bz,result,muted)=>{ const rawX=(ax+bx)/2,rawZ=(az+bz)/2, bad=result.severity!=='ok', label=PG.formatClearance(result);
+      const rw=muted?92:120, rh=muted?30:42, hw=rw/2, hh=rh/2;
+      const {x:mx,z:mz}=freeSpot(rawX,rawZ,hw,hh); placedBadges.push({x:mx,z:mz,hw,hh});
+      const lineColor=bad?'#d64562':(muted?'#D9BFCE':'#C99BB5');
+      floor.appendChild(el('line',{x1:ax,y1:az,x2:bx,y2:bz,stroke:lineColor,'stroke-width':bad?5:(muted?2:3)}));
+      if(mx!==rawX||mz!==rawZ) floor.appendChild(el('line',{x1:rawX,y1:rawZ,x2:mx,y2:mz,stroke:lineColor,'stroke-width':1,'stroke-dasharray':'3 4',opacity:.6}));
       const g=el('g',{transform:`translate(${mx},${mz})`});
-      g.appendChild(el('rect',{x:-60,y:-21,width:120,height:42,rx:21,fill:bad?'#FBE0E8':'#fff',stroke:bad?'#d64562':'#E4B7CB','stroke-width':3}));
-      const tt=el('text',{x:0,y:9,'text-anchor':'middle','font-size':label.length>9?20:25,'font-weight':800,fill:bad?'#c0304f':'#7E5670','pointer-events':'none'}); tt.textContent=label; g.appendChild(tt);
+      const fill=bad?'#FBE0E8':(muted?'#FCF7FA':'#fff'), stroke=bad?'#d64562':(muted?'#EAD7E3':'#E4B7CB'), tcol=bad?'#c0304f':(muted?'#A784A0':'#7E5670');
+      g.appendChild(el('rect',{x:-hw,y:-hh,width:rw,height:rh,rx:hh,fill,stroke,'stroke-width':muted?2:3}));
+      const tt=el('text',{x:0,y:muted?5:9,'text-anchor':'middle','font-size':muted?(label.length>7?14:17):(label.length>9?20:25),'font-weight':800,fill:tcol,'pointer-events':'none'}); tt.textContent=label; g.appendChild(tt);
       floor.appendChild(g); };
-    // между разными столами — как раньше, показываем все зазоры в радиусе интереса (230 см по центрам)
+    // между разными столами — ближайшая пара стульев на весь стык (одна плашка, не по паре)
     for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){ const A=tables[i],B=tables[j]; if(Math.hypot(A.x-B.x,A.z-B.z)>700) continue; const ca=occ(A),cb=occ(B); if(!ca.length||!cb.length) continue;
       let bestVal=1e9,bp=null,bq=null; ca.forEach(p=>cb.forEach(q=>{const d=Math.hypot(p.x-q.x,p.z-q.z); if(d<bestVal){bestVal=d;bp=p;bq=q;}}));
       if(bestVal>230) continue;
       const result=PG.measureChairToChair(chairRect(A,bp),chairRect(B,bq));
       drawGap(bp.x,bp.z,bq.x,bq.z,result); }
-    // соседние стулья НА ОДНОМ столе — раньше не проверялось вообще; показываем только
-    // реальное физическое пересечение (штатный минимальный зазор в ряду — не ошибка)
-    tables.forEach(t=>{ sameTableNeighborPairs(t).forEach(([p,q])=>{
-      const result=PG.measureChairToChair(chairRect(t,p),chairRect(t,q));
-      if(result.severity==='overlap') drawGap(p.x,p.z,q.x,q.z,result); }); }); }
+    // соседние стулья НА ОДНОМ столе — сгруппированы по рядам (sameTableRuns: сторона или
+    // кольцо). Идём вдоль ряда пара за парой; пока зазор совпадает с предыдущим — просто
+    // расширяем текущий «отрезок одинаковости»; как только меняется — закрываем отрезок
+    // одной подписью по его СЕРЕДИНЕ и начинаем новый. Итог: ровный ряд без дырок — одна
+    // подпись; ряд с одной дыркой — три отрезка («как обычно» / «здесь шире» / «как обычно»),
+    // а не подпись на каждой паре подряд.
+    // Значение — «расстояние между центрами минус ширина стула» (та же формула, что уже
+    // используется в подсказке spacingPreview под кнопками мест), а НЕ SAT-зазор повёрнутых
+    // прямоугольников: у ровного круглого стола каждый стул развёрнут на СВОЙ угол по кольцу,
+    // а прямоугольная SAT-модель зависит от знака поворота (у квадрата это НЕ то же самое,
+    // что «форма симметрична» — поворот на +θ и −θ даёт разные фигуры при любом θ, не кратном
+    // 45°), из-за чего у идеально равномерного стола зазор «плавал» от пары к паре (8/18/8/18
+    // вместо одного числа везде) — простое расстояние между центрами такого перекоса не даёт.
+    const val=(pair)=>{ const d=Math.hypot(pair[0].x-pair[1].x, pair[0].z-pair[1].z)-PG.CHAIR_WIDTH;
+      return { value: Math.round(d*10)/10, overlap: d<0, severity: d<0?'overlap':'ok' }; };
+    tables.forEach(t=>{ sameTableRuns(t).forEach(pairs=>{
+      const key=r=>r.overlap?('O'+Math.round(-r.value)):('G'+Math.round(r.value));
+      let i=0;
+      while(i<pairs.length){ const r0=val(pairs[i]), k0=key(r0); let j=i;
+        while(j+1<pairs.length && key(val(pairs[j+1]))===k0) j++;
+        const mid=Math.floor((i+j)/2), [p,q]=pairs[mid], result=val(pairs[mid]);
+        drawGap(p.x,p.z,q.x,q.z,result,!result.overlap);
+        i=j+1; } }); }); }
   document.getElementById('stat').textContent=`${tables.length} стол · ${tables.reduce((s,t)=>s+seatCount(t),0)} гостей`;
   updatePanels();
 }
@@ -463,15 +527,86 @@ function overlapsOther(t){ const pa=tableOBBs(t);
 // стула — уткнулись точно в такой же зазор у следующего, толкнули обратно, и по кругу),
 // стол либо дёргался, либо застревал в случайном месте. Тело стола единственное, что
 // физически обязано не пересекаться никогда — стулья это уже не гарантируют молча.
-function resolveBodies(t){ for(let k=0;k<6;k++){ let moved=false;
-  const obstacles=tables.filter(o=>o!==t).map(tableBodyOBB).concat(objs.map(objOBB));
-  obstacles.forEach(b=>{ const push=PG.rectPushVector(b,tableBodyOBB(t)); if(push){ t.x+=push.x; t.z+=push.z; moved=true; } });
-  if(!moved)break; } }
+// Стол, зажатый в «кармане» между ДВУМЯ соседями, стоящими впритык друг к другу (например
+// два круглых стола, уже сведённые вплотную), может попасть в вечный пинг-понг: толчок от
+// соседа A выталкивает точно на соседа B, толчок от B — точно обратно на A, и так по кругу
+// без конца. Больше итераций НЕ помогает — это не медленная сходимость, а честный 2-цикл
+// (не выдумано: числовым стресс-тестом поймано на ~44% случайных раскладок из 3 круглых
+// столов + стол, добавленный вплотную к обоим — итеративный толчок каждый раз возвращался
+// РОВНО в исходную точку). Поэтому обычный быстрый толчок — только первая попытка (и почти
+// всегда единственная нужная: гладко «съезжает» вдоль соседа, как и раньше при перетаскивании
+// мышью); если после него столешница ВСЁ РАВНО пересекает кого-то — это и есть тот самый
+// карман, откуда обычный толчок не выведет, — ищем ближайшую свободную точку по спирали.
+function bodyObstacles(t){ return tables.filter(o=>o!==t).map(tableBodyOBB).concat(objs.map(objOBB)); }
+function nearestFreeSpot(t,obstacles){
+  const clear=(x,z)=>{ const b=Object.assign({},tableBodyOBB(t),{x,z}); return obstacles.every(o=>PG.rectRectDistance(o,b)>=-0.01); };
+  if(clear(t.x,t.z)) return {x:t.x,z:t.z};
+  for(let r=15;r<=4000;r+=Math.max(12,r*0.18)){
+    const steps=Math.max(12,Math.round(r/9));
+    for(let i=0;i<steps;i++){ const a=i/steps*Math.PI*2, x=t.x+Math.cos(a)*r, z=t.z+Math.sin(a)*r;
+      if(clear(x,z)) return {x,z}; } }
+  return {x:t.x,z:t.z}; }
+function resolveBodies(t){
+  for(let k=0;k<20;k++){ let moved=false;
+    bodyObstacles(t).forEach(b=>{ const push=PG.rectPushVector(b,tableBodyOBB(t)); if(push){ t.x+=push.x; t.z+=push.z; moved=true; } });
+    if(!moved) break; }
+  const obstacles=bodyObstacles(t);
+  if(obstacles.some(o=>PG.rectRectDistance(o,tableBodyOBB(t))<-0.01)){ const pos=nearestFreeSpot(t,obstacles); t.x=pos.x; t.z=pos.z; } }
 // Совместимость: раньше resolve() была «полной» версией (столешница+стулья) для
 // поворота/добавления/дублирования/готовых схем, resolveBodies() — «только столешница»
 // для перетаскивания. Теперь это одно и то же по причине выше — оставляю оба имени
 // в местах вызова для ясности, к чему они относятся.
 function resolve(t){ resolveBodies(t); }
+// Полное разведение — столешница И каждый реально стоящий стул отдельно (tableOBBs).
+// Нужно там, где стол появляется/меняется БЕЗ явного жеста пользователя «подвинуть его
+// вплотную к соседу» — добавление нового стола, дублирование, поворот кнопкой. В этих
+// случаях нет диалога стыковки, который спросил бы «что делать с конфликтом стульев»,
+// поэтому раньше стулья просто молча перекрывались (баг из баг-репорта: «поставил 3 стола
+// на одно место — стулья разбежались», «повернул на 45° — стулья разбежались»). Раздвигаем,
+// пока не останется НИ ОДНОЙ пары пересекающихся частей (столешница-столешница,
+// столешница-стул, стул-стул) — итерации те же, что у resolveBodies, только пересчитываем
+// stulья заново на каждом шаге (chairSlots всегда считает от актуальных t.x/t.z/t.rot).
+// Толкаем t по САМОМУ ГЛУБОКОМУ пересечению среди всех пар «часть-часть» (не по первому
+// попавшемуся по порядку) и пересчитываем tableOBBs(t) заново на каждом шаге — координаты
+// его стульев сдвигаются вместе со столом, следующую проверку нужно делать по свежим данным.
+function worstCollision(t){ let best=null,bestMag=0;
+  tables.forEach(o=>{ if(o===t) return;
+    tableOBBs(o).forEach(part=>tableOBBs(t).forEach(m=>{ const push=PG.rectPushVector(part,m);
+      if(push){ const mag=Math.hypot(push.x,push.z); if(mag>bestMag){bestMag=mag;best=push;} } })); });
+  objs.forEach(o=>{ const push=PG.rectPushVector(objOBB(o),tableBodyOBB(t)); if(push){ const mag=Math.hypot(push.x,push.z); if(mag>bestMag){bestMag=mag;best=push;} } });
+  return best; }
+// Полное разведение — столешница И каждый реально стоящий стул отдельно. Столешница —
+// ЖЁСТКОЕ правило (два стола физически не могут занимать одно место), стул — МЯГКОЕ
+// («по возможности не перекрывать», лучшее из достижимого сдвигом ОДНОГО стола t). Поэтому
+// после каждого толчка по стульям заново прогоняем resolveBodies(t) — толчок, вычисленный
+// по одной паре стульев, иногда чуть заезжает обратно в чужую столешницу (особенно у
+// круглых столов, где стульев много по кругу), и жёсткое правило важнее мягкого: лучше
+// оставить сантиметр-другой нахлёста стульев, чем нарушить непересечение столешниц.
+// Толкать сразу «в лоб» по самому глубокому пересечению стул-стул, когда столешницы ещё
+// грубо перекрываются (два круглых стола почти в одной точке) — не работает вовсе: глубина
+// пересечения ЛЮБОЙ пары стульев ограничена размером самого стула (~36 см) и никогда не
+// отражает, что столу на самом деле нужно уехать на метры, а «самый глубокий» толчок при
+// многих стульях по кругу скачет от пары к паре и не сходится — поймано числовой проверкой,
+// без этого шага (resolveBodies первым) оставалось −16…−38 см нахлёста, а не выдумано на глаз.
+// Тот же «быстрый толчок, а если не справился — гарантированный поиск по спирали», что и у
+// resolveBodies (см. её комментарий про карман/2-цикл — ровно то же самое может случиться
+// и на уровне стульев, только толкать там особо нечем: глубина пересечения пары стульев
+// ограничена их собственным размером и никогда не отражает, что столу нужно уехать на метры).
+// Быстрый толчок почти всегда достаточен и держит стол на месте, спираль — редкая страховка.
+function footprintClear(t,x,z,others,objOBBs){ const dx=x-t.x, dz=z-t.z;
+  const mine=tableOBBs(t).map(p=>Object.assign({},p,{x:p.x+dx,z:p.z+dz}));
+  return !others.some(parts=>anyOverlap(mine,parts)) && !objOBBs.some(o=>anyOverlap(mine,[o])); }
+function nearestFreeSpotFull(t,others,objOBBs){
+  if(footprintClear(t,t.x,t.z,others,objOBBs)) return {x:t.x,z:t.z};
+  for(let r=15;r<=4000;r+=Math.max(12,r*0.18)){
+    const steps=Math.max(12,Math.round(r/9));
+    for(let i=0;i<steps;i++){ const a=i/steps*Math.PI*2, x=t.x+Math.cos(a)*r, z=t.z+Math.sin(a)*r;
+      if(footprintClear(t,x,z,others,objOBBs)) return {x,z}; } }
+  return {x:t.x,z:t.z}; }
+function resolveFull(t){ resolveBodies(t);
+  for(let k=0;k<60;k++){ const push=worstCollision(t); if(!push) break; t.x+=push.x; t.z+=push.z; resolveBodies(t); }
+  const others=tables.filter(o=>o!==t).map(tableOBBs), objOBBs=objs.map(objOBB);
+  if(!footprintClear(t,t.x,t.z,others,objOBBs)){ const pos=nearestFreeSpotFull(t,others,objOBBs); t.x=pos.x; t.z=pos.z; resolveBodies(t); } }
 // Симметрично: перетаскиваемый объект зала тоже не должен вставать поверх стола
 // (по столешнице — без учёта стульев, тот же уровень точности, что и у resolveBodies).
 function resolveObjBody(o){ for(let k=0;k<6;k++){ let moved=false;
@@ -578,11 +713,20 @@ function showDockPreview(A,B,plan){
   const cleanup=()=>{ mask.classList.remove('show'); confirmBtn.onclick=cancelBtn.onclick=null; };
   confirmBtn.onclick=()=>{
     const startX=B.x, startZ=B.z; cleanup(); dockGhost=null;
-    B.x=plan.x; B.z=plan.z; render(); save();
-    const conflicts=findChairConflicts(B).filter(c=>c.other===A); // в паре стыковки нас интересует только конфликт именно с A
-    if(conflicts.length){ showDockDialog(B,startX,startZ,conflicts,{
-      title:DOCK_TYPE_NAMES[plan.type]+' — конфликт стульев', other:A, gapDir:plan.dir,
-      afterRemove:()=>createGroupFromDock(A,B,plan), afterGap:()=>createGroupFromDock(A,B,plan) }); }
+    B.x=plan.x; B.z=plan.z;
+    // Столешницы пересекаться не могут НИКОГДА (физика) — план стыковки считает только пару
+    // A/B и может подвести вплотную к A так, что B заденет столешницу ТРЕТЬЕГО стола (если
+    // рядом уже что-то стояло, юзер жаловался: «поставил стол — стулья/столы перекрылись»).
+    // resolveBodies проверяет ВСЕХ, не только A — для A/B это no-op (там ровно 0 см, не минус).
+    resolveBodies(B); render(); save();
+    // Конфликт стульев проверяем со ВСЕМИ соседями, а не только с A — раньше стыковка
+    // третьего стола к уже состыкованной паре могла тихо оставить нахлёст стульев с тем
+    // соседом, который не участвовал в этом конкретном действии «Стыковать».
+    const conflicts=findChairConflicts(B);
+    if(conflicts.length){ const onlyA=conflicts.every(c=>c.other===A);
+      showDockDialog(B,startX,startZ,conflicts,{
+        title:DOCK_TYPE_NAMES[plan.type]+' — конфликт стульев', other:onlyA?A:null, gapDir:plan.dir,
+        afterRemove:()=>createGroupFromDock(A,B,plan), afterGap:()=>createGroupFromDock(A,B,plan) }); }
     else createGroupFromDock(A,B,plan); };
   cancelBtn.onclick=()=>{ cleanup(); dockGhost=null; render(); };
 }
@@ -659,6 +803,15 @@ const physicalMax=(t,k)=> t.shape==='round' ? PG.getMaxRoundSeats(t.R*2) : PG.ge
 const capWarning=(t,k)=> t.shape==='round'
   ? PG.getSeatCapacityWarning({shape:'round',diameter:t.R*2,occupied:t.seats})
   : PG.getSeatCapacityWarning({shape:'rect',sideLength:sideLenFor(t,k),occupied:capVal(t,k)});
+// Превью прохода между стульями для КАЖДОГО возможного числа мест на этой стороне (2..макс) —
+// чтобы решить, сколько гостей сажать, глядя на реальный зазор, а не подбирая наугад кликами.
+function spacingPreview(t,k){ const maxN=physicalMax(t,k); if(maxN<2) return '';
+  const parts=[];
+  for(let n=2;n<=maxN;n++){ let gap;
+    if(t.shape==='round'){ const chord=2*(t.R+CH)*Math.sin(Math.PI/n); gap=Math.round(chord-PG.CHAIR_WIDTH); }
+    else { const pitch=sideLenFor(t,k)/n; gap=Math.round(pitch-PG.CHAIR_WIDTH); }
+    parts.push(`<b class="${gap<PG.MIN_SEAT_GAP?'sp-bad':''}">${n}</b>·${gap}`); }
+  return parts.join('&nbsp; '); }
 // ---- мини-схема стола (вид сверху) в инспекторе: клик по стулу — убрать, по пунктирному ＋ — поставить именно сюда ----
 const SIDE_NAMES={seatsA:'Сторона 1',seatsB:'Сторона 2',seatsE1:'Торец 1',seatsE2:'Торец 2',seats:'Гости вокруг'};
 function dgChairs(n,x0,y0,W,H,side,hl,gaps,key){ let s=''; gaps=gaps||[];
@@ -708,8 +861,9 @@ function renderInsp(){ const box=document.getElementById('insp'), t=selected;
   document.getElementById('i-sub').textContent=tsize(t)+' · '+seatCount(t)+' мест';
   document.getElementById('i-seatlabel').textContent = t.shape==='rect' ? 'Стулья по сторонам' : 'Гости за столом';
   const esc=s=>String(s).replace(/"/g,'&quot;');
-  const row=(l,k,v)=>{ const atMax=v>=physicalMax(t,k), warn=atMax?capWarning(t,k):null;
+  const row=(l,k,v)=>{ const atMax=v>=physicalMax(t,k), warn=atMax?capWarning(t,k):null, sp=spacingPreview(t,k);
     return `<div class="row" data-key="${k}"><span>${l}</span><button data-cap="${k}" data-d="-1">−</button><b>${v}</b><button data-cap="${k}" data-d="1"${atMax?` disabled title="${esc(warn)}"`:''}>+</button></div>`
+      + (sp?`<div class="spprev" title="Проход между стульями (см) при разном числе мест">${sp}</div>`:'')
       + (warn?`<div class="capwarn">${esc(warn)}</div>`:''); };
   document.getElementById('i-rows').innerHTML = t.shape==='round'
     ? row('Гостей','seats',t.seats)
@@ -765,7 +919,7 @@ document.getElementById('i-diagram').addEventListener('click',e=>{
     if(j>=0){ if(capVal(t,key)>=physicalMax(t,key)) return; g.splice(j,1); if(overlapsOther(t)) g.push(slot); } else g.push(slot); }
   render(); save();
 });
-document.querySelectorAll('.rotrow button').forEach(b=>b.addEventListener('click',()=>{ if(!selected)return; selected.rot+=(+b.dataset.rot)*Math.PI/4; resolve(selected); render(); save(); }));
+document.querySelectorAll('.rotrow button').forEach(b=>b.addEventListener('click',()=>{ if(!selected)return; selected.rot+=(+b.dataset.rot)*Math.PI/4; resolveFull(selected); render(); save(); }));
 document.getElementById('i-name').addEventListener('change',e=>{ if(selected){ selected.name=e.target.value.trim(); render(); save(); } });
 document.getElementById('i-align').addEventListener('click',()=>{ const t=selected; if(!t)return;
   // «Выровнять» = равномерно разложить ИМЕННО ЗАНЯТЫЕ стулья по всей длине стороны, убрав
@@ -781,12 +935,12 @@ document.getElementById('i-del').addEventListener('click',()=>{ const t=selected
   tables=tables.filter(x=>x!==selected); selected=null;
   if(grp){ grp.tableIds=grp.tableIds.filter(id=>id!==t.id); if(grp.tableIds.length<2) ungroupNow(grp); }
   render(); save(); });
-document.getElementById('i-dup').addEventListener('click',()=>{ if(!selected)return; const c=JSON.parse(JSON.stringify(selected)); c.id=genId(); c.groupId=null; c.x+=90;c.z+=90;c.name='';c.bouquets=[]; resolve(c); tables.push(c); selected=c; render(); save(); });
+document.getElementById('i-dup').addEventListener('click',()=>{ if(!selected)return; const c=JSON.parse(JSON.stringify(selected)); c.id=genId(); c.groupId=null; c.x+=90;c.z+=90;c.name='';c.bouquets=[]; resolveFull(c); tables.push(c); selected=c; render(); save(); });
 // ---- тулбар ----
 document.getElementById('addsel').addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(!v)return; const p=v.split('-'); const cx=VB.x+VB.w/2+(Math.random()*200-100), cz=VB.z+VB.h/2+(Math.random()*200-100);
   let t; if(p[0]==='round') t=newRoundTable(cx,cz,+p[1]/2,+p[2]);
   else { const L=+p[1],W=+p[2],n=Math.max(2,Math.round(L/48)); t={id:genId(),shape:'rect',x:cx,z:cz,rot:0,hl:L/2,hw:W/2,seatsA:n,seatsB:n,seatsE1:0,seatsE2:0,gaps:{seatsA:[],seatsB:[],seatsE1:[],seatsE2:[]},bouquets:[],settings:[]}; }
-  resolve(t); tables.push(t); selected=t; render(); save(); });
+  resolveFull(t); tables.push(t); selected=t; render(); save(); });
 document.getElementById('objsel').addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(!v)return; const d=OBJ[v]; objs.push({id:'o'+Date.now(),kind:v,x:VB.x+VB.w/2,z:VB.z+VB.h*0.72,rot:0,w:d.w,h:d.h,label:d.label,fill:d.fill,stroke:d.stroke}); render(); save(); });
 document.getElementById('preset').addEventListener('change',e=>{ const v=e.target.value; e.target.value=''; if(!v)return; applyPreset(v); });
 document.getElementById('distbtn').addEventListener('click',function(){ showDist=!showDist; this.classList.toggle('on',showDist); render(); });
