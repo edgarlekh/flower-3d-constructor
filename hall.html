@@ -602,7 +602,12 @@
   // Расставить стулья ровно: закрыть дырки, не уменьшая физическую вместимость
   // стороны (seatsA/B/E1/E2 — число слотов, а не гостей; раньше это тихо срезало
   // вместимость до текущего числа стульев — та же ошибка, что была в plan.html).
-  function compactSeats(t){ if(!isRect(t)) return; t.userData.gaps={}; t.userData.seats=rectTotal(t); buildSettings(t); }
+  // «Расставить ровно» — распределить именно занятые стулья по всей длине стороны без дырки
+  // (число слотов = числу занятых; максимум для "+" всё равно считается заново из реальных
+  // размеров стола через PlanGeometry, не хранится в seatsA — так что дорасти обратно можно).
+  function compactSeats(t){ if(!isRect(t)) return; const G=t.userData.gaps||{};
+    ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ const cap=t.userData[k]||0, gaps=(G[k]||[]).length; t.userData[k]=Math.max(0,cap-gaps); });
+    t.userData.gaps={}; t.userData.seats=rectTotal(t); buildSettings(t); }
   // Мир↔локаль с учётом поворота стола (rotation.y).
   function localToWorld(t,lx,lz){ const a=t.rotation.y,c=Math.cos(a),s=Math.sin(a); return [t.position.x + c*lx + s*lz, t.position.z - s*lx + c*lz]; }
   function worldToLocal(t,wx,wz){ const a=t.rotation.y,c=Math.cos(a),s=Math.sin(a),dx=wx-t.position.x,dz=wz-t.position.z; return [c*dx - s*dz, s*dx + c*dz]; }

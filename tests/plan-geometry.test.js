@@ -81,3 +81,29 @@ test('измерение работает и для повёрнутых пря�
   const r = G.measureTableToTable(a, b);
   assert.ok(r.value > 0 && r.value < 60);
 });
+
+// ---- rectPushVector: точное SAT-выталкивание повёрнутых столов (фикс бага "повернул на 45° — всё сломалось") ----
+test('rectPushVector: непересекающиеся прямоугольники — null', () => {
+  const a = { x: 0, z: 0, rot: 0, hx: 20, hy: 20 };
+  const b = { x: 100, z: 0, rot: 0, hx: 20, hy: 20 };
+  assert.equal(G.rectPushVector(a, b), null);
+});
+test('rectPushVector: стол 240x90 повёрнутый на 45° не считается пересекающим соседа, который его настоящая (не AABB) форма не задевает', () => {
+  // AABB стола 240x90 (hl=120,hw=45) при повороте 45° раздувается до ~117x117 —
+  // сосед на расстоянии 130 см ложно попадал бы в АABB-коллизию, хотя реальный
+  // повёрнутый прямоугольник (ромб) его не касается.
+  const a = { x: 0, z: 0, rot: Math.PI / 4, hx: 120, hy: 45 };
+  const b = { x: 130, z: 0, rot: 0, hx: 20, hy: 20 };
+  assert.equal(G.rectPushVector(a, b), null);
+});
+test('rectPushVector: пересекающиеся прямоугольники выталкиваются ровно на глубину проникновения', () => {
+  const a = { x: 0, z: 0, rot: 0, hx: 20, hy: 20 };
+  const b = { x: 30, z: 0, rot: 0, hx: 20, hy: 20 }; // пересечение на 10 по X
+  const push = G.rectPushVector(a, b);
+  assert.ok(push);
+  assert.equal(Math.round(push.x), 10);
+  assert.equal(Math.round(push.z), 0);
+  // после выталкивания больше не пересекаются
+  const moved = { x: b.x + push.x, z: b.z + push.z, rot: b.rot, hx: b.hx, hy: b.hy };
+  assert.equal(G.rectPushVector(a, moved), null);
+});

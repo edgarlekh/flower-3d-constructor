@@ -16,3 +16,6 @@ Thumbs.db
 # Логи и временное
 *.log
 node_modules/
+
+# Артефакты Playwright MCP (скриншоты/снимки страниц при тестировании через Claude Code)
+.playwright-mcp/

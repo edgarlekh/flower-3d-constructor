@@ -141,6 +141,29 @@
     return separated ? minGap : -minOverlap;
   }
 
+  // SAT-выталкивание: на сколько и в какую сторону сдвинуть b, чтобы он больше не пересекал a
+  // (по оси минимального проникновения — стандартное разрешение столкновения повёрнутых
+  // прямоугольников). Возвращает null, если a и b не пересекаются вовсе.
+  // Именно этой функции не хватало в plan.html: коллизия столов считалась по AABB
+  // (halfExt) — для стола, повёрнутого на 45°, эта коробка сильно больше самого стола
+  // (вписанный в квадрат ромб), из-за чего resolve() после поворота либо ложно считал
+  // соседние столы пересекающимися и расталкивал их не туда, либо расталкивал неточно.
+  function rectPushVector(a, b) {
+    var ca = rectCorners(a), cb = rectCorners(b);
+    var axes = rectAxes(a).concat(rectAxes(b));
+    var minOverlap = Infinity, minAxis = null;
+    for (var i = 0; i < axes.length; i++) {
+      var pa = project(ca, axes[i]), pb = project(cb, axes[i]);
+      var overlap = Math.min(pa.max, pb.max) - Math.max(pa.min, pb.min);
+      if (overlap <= 0) return null; // разделены хотя бы по одной оси — не пересекаются
+      if (overlap < minOverlap) { minOverlap = overlap; minAxis = axes[i]; }
+    }
+    var dx = b.x - a.x, dz = b.z - a.z;
+    var sign = (dx * minAxis.x + dz * minAxis.z) < 0 ? -1 : 1;
+    var px = minAxis.x * sign * minOverlap, pz = minAxis.z * sign * minOverlap;
+    return { x: px === 0 ? 0 : px, z: pz === 0 ? 0 : pz }; // нормализуем -0 в 0
+  }
+
   function severityFor(value, tightThreshold) {
     if (value < 0) return 'overlap';
     if (value < tightThreshold) return 'tight';
@@ -200,6 +223,7 @@
     getSeatCapacityWarning: getSeatCapacityWarning,
     normalizeGaps: normalizeGaps,
     rectRectDistance: rectRectDistance,
+    rectPushVector: rectPushVector,
     measureClearance: measureClearance,
     measureChairToChair: measureChairToChair,
     measureTableToTable: measureTableToTable,

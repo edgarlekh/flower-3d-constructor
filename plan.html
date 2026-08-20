@@ -436,58 +436,55 @@ function clusters(){ const p=tables.map((_,i)=>i); const find=i=>p[i]===i?i:(p[i
   for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){ const a=tables[i],b=tables[j],ea=halfExt(a),eb=halfExt(b); const ox=ea.hx+eb.hx-Math.abs(a.x-b.x),oy=ea.hy+eb.hy-Math.abs(a.z-b.z); if(ox>-12&&oy>-12) p[find(i)]=find(j); }
   const m={}; tables.forEach((t,i)=>{const r=find(i);(m[r]=m[r]||[]).push(t);}); return Object.values(m); }
 // ---- коллизия (с учётом стульев!) + привязка по краю/центру/торцу ----
-// «отпечаток» стола = список боксов: столешница + КАЖДЫЙ реально стоящий стул отдельно
-// (не один общий прямоугольник — иначе убранные с одной стороны стулья не помогают сблизить столы,
-// как жаловался юзер: «не даёт соединить столы», хотя место с той стороны освобождено)
-function tableBodyPart(t){ const e=halfExt(t); return {minX:t.x-e.hx,maxX:t.x+e.hx,minZ:t.z-e.hy,maxZ:t.z+e.hy}; }
-function chairPartsWithMeta(t){ return chairSlots(t).filter(c=>!c.gapped).map(c=>({minX:c.x-18,maxX:c.x+18,minZ:c.z-18,maxZ:c.z+18,side:c.side,slot:c.slot,x:c.x,z:c.z})); }
-function tableParts(t){ const parts=[tableBodyPart(t)];
-  chairPartsWithMeta(t).forEach(c=>parts.push(c));
-  return parts; }
-function boxOverlap(a,b){ return Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX)>0 && Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ)>0; }
-function partsOverlap(pa,pb){ for(const a of pa) for(const b of pb){ if(boxOverlap(a,b)) return true; } return false; }
+// Точная SAT-коллизия повёрнутых прямоугольников (PG.rectRectDistance/rectPushVector),
+// а не AABB (halfExt) — раньше стол, повёрнутый не на 90°-градусные углы (например 45°),
+// проверялся по коробке, ощутимо больше самого стола (в неё вписан ромб), из-за чего
+// resolve() после поворота либо ложно считал соседние столы пересекающимися, либо
+// расталкивал их не туда. «Отпечаток» стола = столешница (OBB) + КАЖДЫЙ реально стоящий
+// стул отдельно (не один общий прямоугольник — иначе убранные с одной стороны стулья не
+// помогают сблизить столы, как жаловался юзер: «не даёт соединить столы»).
+function tableBodyOBB(t){ if(t.shape==='round') return {x:t.x,z:t.z,rot:0,hx:t.R,hy:t.R};
+  return {x:t.x,z:t.z,rot:t.rot,hx:t.hl,hy:t.hw}; }
+function chairPartsWithMeta(t){ return chairSlots(t).filter(c=>!c.gapped).map(c=>({x:c.x,z:c.z,rot:0,hx:18,hy:18,side:c.side,slot:c.slot})); }
+function tableOBBs(t){ return [tableBodyOBB(t)].concat(chairPartsWithMeta(t)); }
+function anyOverlap(pa,pb){ for(const a of pa) for(const b of pb){ if(PG.rectRectDistance(a,b)<0) return true; } return false; }
 // Объекты зала (бар/сцена/танцпол/арка) — статичные препятствия того же ранга, что и другие
 // столы: стол/стул не должен вставать поверх них (ТЗ 3.2 п.4 и критерий приёмки №21).
-function objBodyPart(o){ return {minX:o.x-o.w/2,maxX:o.x+o.w/2,minZ:o.z-o.h/2,maxZ:o.z+o.h/2}; }
-function overlapsOther(t){ const pa=tableParts(t);
-  if(tables.some(o=>o!==t && partsOverlap(pa,tableParts(o)))) return true;
-  return objs.some(o=>partsOverlap(pa,[objBodyPart(o)])); }
-// Полное разведение (столешница+стулья) — используется там, где раздвигание оправдано и
-// ожидаемо (поворот, добавление/дублирование стола, готовые схемы), но НЕ при обычном
-// перетаскивании — там раздвигание ощущается как «стол сам уехал», см. resolveBodies().
-function resolve(t){ for(let k=0;k<6;k++){ let moved=false;
-  const obstacles=tables.filter(o=>o!==t).map(o=>({x:o.x,z:o.z,parts:tableParts(o)}))
-    .concat(objs.map(o=>({x:o.x,z:o.z,parts:[objBodyPart(o)]})));
-  obstacles.forEach(o=>{
-  const pa=tableParts(t), pb=o.parts; let ox=0,oz=0,found=false;
-  pa.forEach(a=>pb.forEach(b=>{ const dx=Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX), dz=Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ);
-    if(dx>0&&dz>0){ found=true; if(dx>ox)ox=dx; if(dz>oz)oz=dz; } }));
-  if(found){ const dx=t.x-o.x,dz=t.z-o.z; if(Math.abs(dx)>=Math.abs(dz)) t.x+=(dx>=0?ox:-ox); else t.z+=(dz>=0?oz:-oz); moved=true; } }); if(!moved)break; } }
+function objOBB(o){ return {x:o.x,z:o.z,rot:o.rot||0,hx:o.w/2,hy:o.h/2}; }
+function overlapsOther(t){ const pa=tableOBBs(t);
+  if(tables.some(o=>o!==t && anyOverlap(pa,tableOBBs(o)))) return true;
+  return objs.some(o=>anyOverlap(pa,[objOBB(o)])); }
 // Разведение ТОЛЬКО по столешницам (без стульев) — физика, которую нельзя нарушать никогда
 // (два стола не могут занимать одно место), но которая не мешает столам с конфликтующими
-// стульями просто соприкоснуться при перетаскивании — конфликт стульев решает диалог
-// стыковки (findChairConflicts + showDockDialog), а не молчаливое раздвигание.
+// стульями просто соприкоснуться — конфликт стульев решает диалог стыковки
+// (findChairConflicts + showDockDialog) или честно подсвечивается Этапом 3, а не
+// раздвигается силой. Раньше resolve() пытался развести ещё и стулья — при повороте стола
+// рядом с круглым столом это иногда попадало в вечные качели (толкнули от одного соседского
+// стула — уткнулись точно в такой же зазор у следующего, толкнули обратно, и по кругу),
+// стол либо дёргался, либо застревал в случайном месте. Тело стола единственное, что
+// физически обязано не пересекаться никогда — стулья это уже не гарантируют молча.
 function resolveBodies(t){ for(let k=0;k<6;k++){ let moved=false;
-  const obstacles=tables.filter(o=>o!==t).map(o=>({x:o.x,z:o.z,body:tableBodyPart(o)}))
-    .concat(objs.map(o=>({x:o.x,z:o.z,body:objBodyPart(o)})));
-  obstacles.forEach(o=>{
-  const a=tableBodyPart(t), b=o.body;
-  const dx=Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX), dz=Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ);
-  if(dx>0&&dz>0){ const ddx=t.x-o.x,ddz=t.z-o.z; if(Math.abs(ddx)>=Math.abs(ddz)) t.x+=(ddx>=0?dx:-dx); else t.z+=(ddz>=0?dz:-dz); moved=true; } }); if(!moved)break; } }
+  const obstacles=tables.filter(o=>o!==t).map(tableBodyOBB).concat(objs.map(objOBB));
+  obstacles.forEach(b=>{ const push=PG.rectPushVector(b,tableBodyOBB(t)); if(push){ t.x+=push.x; t.z+=push.z; moved=true; } });
+  if(!moved)break; } }
+// Совместимость: раньше resolve() была «полной» версией (столешница+стулья) для
+// поворота/добавления/дублирования/готовых схем, resolveBodies() — «только столешница»
+// для перетаскивания. Теперь это одно и то же по причине выше — оставляю оба имени
+// в местах вызова для ясности, к чему они относятся.
+function resolve(t){ resolveBodies(t); }
 // Симметрично: перетаскиваемый объект зала тоже не должен вставать поверх стола
 // (по столешнице — без учёта стульев, тот же уровень точности, что и у resolveBodies).
-function resolveObjBody(o){ for(let k=0;k<6;k++){ let moved=false; tables.forEach(t=>{
-  const a=objBodyPart(o), b=tableBodyPart(t);
-  const dx=Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX), dz=Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ);
-  if(dx>0&&dz>0){ const ddx=o.x-t.x,ddz=o.z-t.z; if(Math.abs(ddx)>=Math.abs(ddz)) o.x+=(ddx>=0?dx:-dx); else o.z+=(ddz>=0?dz:-dz); moved=true; } }); if(!moved)break; } }
+function resolveObjBody(o){ for(let k=0;k<6;k++){ let moved=false;
+  tables.forEach(t=>{ const push=PG.rectPushVector(tableBodyOBB(t),objOBB(o)); if(push){ o.x+=push.x; o.z+=push.z; moved=true; } });
+  if(!moved)break; } }
 const dispSide=s=> s==='table' ? 'столешница' : (SIDE_NAMES[s]||s);
 // Конфликты стульев после перетаскивания: чужие/свои стулья либо друг с другом, либо со
 // столешницей соседа. side:'table' — конфликт со столешницей целиком (не с конкретным местом).
-function findChairConflicts(t){ const mine=chairPartsWithMeta(t), myBody=tableBodyPart(t), out=[];
-  tables.forEach(o=>{ if(o===t) return; const theirs=chairPartsWithMeta(o), theirBody=tableBodyPart(o);
-    mine.forEach(a=>theirs.forEach(b=>{ if(boxOverlap(a,b)) out.push({other:o,a,b}); }));
-    mine.forEach(a=>{ if(boxOverlap(a,theirBody)) out.push({other:o,a,b:{side:'table',slot:-1,x:o.x,z:o.z}}); });
-    theirs.forEach(b=>{ if(boxOverlap(myBody,b)) out.push({other:o,a:{side:'table',slot:-1,x:t.x,z:t.z},b}); }); });
+function findChairConflicts(t){ const mine=chairPartsWithMeta(t), myBody=tableBodyOBB(t), out=[];
+  tables.forEach(o=>{ if(o===t) return; const theirs=chairPartsWithMeta(o), theirBody=tableBodyOBB(o);
+    mine.forEach(a=>theirs.forEach(b=>{ if(PG.rectRectDistance(a,b)<0) out.push({other:o,a,b}); }));
+    mine.forEach(a=>{ if(PG.rectRectDistance(a,theirBody)<0) out.push({other:o,a,b:{side:'table',slot:-1,x:o.x,z:o.z}}); });
+    theirs.forEach(b=>{ if(PG.rectRectDistance(myBody,b)<0) out.push({other:o,a:{side:'table',slot:-1,x:t.x,z:t.z},b}); }); });
   return out; }
 // ---- инструмент «Стыковать столы»: автоопределение сторон + расчёт целевого положения ----
 // Переводит МИРОВОЕ направление (dx,dz) в локальные оси стола t (обратный поворот t.rot).
@@ -495,7 +492,18 @@ function worldToLocalDir(t,dx,dz){ const c=Math.cos(t.rot), s=Math.sin(t.rot); r
 // Какой из 4 сторон прямоугольного стола обращена в направлении (dx,dz) от его центра.
 function facingSide(t,dx,dz){ if(t.shape!=='rect') return 'seats';
   const {lx,lz}=worldToLocalDir(t,dx,dz);
-  return Math.abs(lx)>=Math.abs(lz) ? (lx>=0?'seatsE1':'seatsE2') : (lz>=0?'seatsA':'seatsB'); }
+  // Раньше сравнивали просто |lx| и |lz| — при реальном перетаскивании стол B почти
+  // никогда не стоит идеально по оси, и небольшой диагональный сдвиг (типично при drag)
+  // мог перевесить в сторону не той стороны (напр. у стола 240×90 сдвиг в 50 см по Z
+  // при 200 см по X — явно "торец", но чистое |lz|>|lx| после поворота могло сработать
+  // наоборот). Сначала проверяем physически осмысленный признак: лежит ли B в пределах
+  // ширины/длины A ("прямо у торца" / "прямо у длинной стороны"), и только если это
+  // неоднозначно (угол) — сравниваем, на сколько B торчит наружу за каждую грань.
+  const inZBand=Math.abs(lz)<=t.hw, inXBand=Math.abs(lx)<=t.hl;
+  if(inZBand && !inXBand) return lx>=0?'seatsE1':'seatsE2';
+  if(inXBand && !inZBand) return lz>=0?'seatsA':'seatsB';
+  const gapX=Math.abs(lx)-t.hl, gapZ=Math.abs(lz)-t.hw;
+  return gapX>=gapZ ? (lx>=0?'seatsE1':'seatsE2') : (lz>=0?'seatsA':'seatsB'); }
 // Полу-протяжённость стола (OBB), если его спроецировать на мировое направление (dx,dz) —
 // нужна, чтобы поставить два стола ровно впритык под любым углом, а не только 0/90°.
 function projHalfExtent(t,dx,dz){ if(t.shape==='round') return t.R;
@@ -760,13 +768,14 @@ document.getElementById('i-diagram').addEventListener('click',e=>{
 document.querySelectorAll('.rotrow button').forEach(b=>b.addEventListener('click',()=>{ if(!selected)return; selected.rot+=(+b.dataset.rot)*Math.PI/4; resolve(selected); render(); save(); }));
 document.getElementById('i-name').addEventListener('change',e=>{ if(selected){ selected.name=e.target.value.trim(); render(); save(); } });
 document.getElementById('i-align').addEventListener('click',()=>{ const t=selected; if(!t)return;
-  if(t.shape==='round'){ // отдельное осознанное действие: сбросить фиксированные дырки и пересчитать слоты под текущих гостей
-    t.seatSlots=Math.max(0,(t.seatSlots||0)-(t.gaps||[]).length); t.gaps=[]; t.distributionMode='even'; t.seats=t.seatSlots; }
-  else { // «Выровнять» = закрыть дырки, не уменьшая физическую вместимость стороны:
-    // seatsA/B/E1/E2 — это число СЛОТОВ (не гостей), его трогать нельзя, иначе
-    // «выравнивание» тихо уменьшает вместимость (это была реальная ошибка).
-    // Занятые стулья и так распределяются по всей длине стороны через chairSlots().
-    ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ t.gaps[k]=[]; }); }
+  // «Выровнять» = равномерно разложить ИМЕННО ЗАНЯТЫЕ стулья по всей длине стороны, убрав
+  // дырку (chairSlots() расставляет N слотов равными долями всей длины — значит, чтобы N
+  // стульев легли БЕЗ дырки ровно по всей стороне, число слотов должно стать равным числу
+  // занятых стульев). НЕ уменьшение физической вместимости навсегда: максимум для кнопки "+"
+  // (physicalMax) считается заново из реальных размеров стола, а не хранится в seatsA — так
+  // что "+" по-прежнему можно нажать и дорасти до настоящего физического лимита после этого.
+  if(t.shape==='round'){ t.seatSlots=Math.max(0,(t.seatSlots||0)-(t.gaps||[]).length); t.gaps=[]; t.distributionMode='even'; t.seats=t.seatSlots; }
+  else { ['seatsA','seatsB','seatsE1','seatsE2'].forEach(k=>{ t[k]=capVal(t,k); t.gaps[k]=[]; }); }
   render(); save(); });
 document.getElementById('i-del').addEventListener('click',()=>{ const t=selected; const grp=t&&groupOf(t);
   tables=tables.filter(x=>x!==selected); selected=null;
@@ -783,8 +792,19 @@ document.getElementById('preset').addEventListener('change',e=>{ const v=e.targe
 document.getElementById('distbtn').addEventListener('click',function(){ showDist=!showDist; this.classList.toggle('on',showDist); render(); });
 document.getElementById('lockbtn').addEventListener('click',function(){ locked=!locked; this.classList.toggle('on',locked); if(locked){selected=null;selObj=null;} render(); save(); });
 document.getElementById('fitbtn').addEventListener('click',fitView);
+// Модалки стыковки (диалог конфликта и превью) закрываются по Esc и по клику мимо
+// карточки — раньше не закрывались никак, кроме явной кнопки, и модалка могла «зависнуть»
+// поверх интерфейса, если пользователь передумал и просто хотел выйти — воспринималось
+// как «всё сломалось».
+function dismissDockModals(){
+  const dm=document.getElementById('dockmask'), dp=document.getElementById('dockpreview');
+  if(dm.classList.contains('show')) document.getElementById('dock-cancel').click();
+  if(dp.classList.contains('show')) document.getElementById('dp-cancel').click();
+}
+document.getElementById('dockmask').addEventListener('click',e=>{ if(e.target===e.currentTarget) document.getElementById('dock-cancel').click(); });
+document.getElementById('dockpreview').addEventListener('click',e=>{ if(e.target===e.currentTarget) document.getElementById('dp-cancel').click(); });
 addEventListener('keydown',e=>{ if(e.key==='Delete'&&selObj){ objs=objs.filter(o=>o.id!==selObj); selObj=null; render(); save(); }
-  if(e.key==='Escape'&&docking) setDocking(false); });
+  if(e.key==='Escape'){ if(docking) setDocking(false); dismissDockModals(); } });
 
 const R90=Math.PI/2;
 function applyPreset(v){
