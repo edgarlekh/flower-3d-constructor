@@ -464,12 +464,26 @@ function render(){
       g.appendChild(el('rect',{x:-hw,y:-hh,width:rw,height:rh,rx:hh,fill,stroke,'stroke-width':muted?2:3}));
       const tt=el('text',{x:0,y:muted?5:9,'text-anchor':'middle','font-size':muted?(label.length>7?14:17):(label.length>9?20:25),'font-weight':800,fill:tcol,'pointer-events':'none'}); tt.textContent=label; g.appendChild(tt);
       floor.appendChild(g); };
-    // между разными столами — ближайшая пара стульев на весь стык (одна плашка, не по паре)
+    // между разными столами — раньше бралась только ОДНА, самая близкая пара стульев на весь
+    // стык целиком. При стыковке двух столов бортом друг к другу это в норме ДВА ряда стульев
+    // сходятся почти вплотную (верхний и нижний) — а показывался зазор только у того ряда,
+    // что оказался чуть ближе, второй ряд не получал числа вообще (юзер жаловался: «когда
+    // объединяешь столы и убираешь стулья — не видно расстояния»). Теперь — одна плашка на
+    // каждый РЯД: группируем занятые стулья A по стороне (для прямоугольного — 4 стороны,
+    // для круглого — единое кольцо, `chairSlots` уже даёт эту метку в `side`), для каждой
+    // группы берём ближайший стул B; и симметрично со стороны B. Дубли (одна и та же пара
+    // найдена и «от A», и «от B») схлопываются по id стульев.
+    const nearestPerRow=(occFrom,occTo)=>{ const bySide={};
+      occFrom.forEach(p=>(bySide[p.side]=bySide[p.side]||[]).push(p));
+      return Object.values(bySide).map(group=>{ let bd=1e9,bp=null,bq=null;
+        group.forEach(p=>occTo.forEach(q=>{ const d=Math.hypot(p.x-q.x,p.z-q.z); if(d<bd){bd=d;bp=p;bq=q;} }));
+        return bp?{p:bp,q:bq,d:bd}:null; }).filter(Boolean); };
     for(let i=0;i<tables.length;i++)for(let j=i+1;j<tables.length;j++){ const A=tables[i],B=tables[j]; if(Math.hypot(A.x-B.x,A.z-B.z)>700) continue; const ca=occ(A),cb=occ(B); if(!ca.length||!cb.length) continue;
-      let bestVal=1e9,bp=null,bq=null; ca.forEach(p=>cb.forEach(q=>{const d=Math.hypot(p.x-q.x,p.z-q.z); if(d<bestVal){bestVal=d;bp=p;bq=q;}}));
-      if(bestVal>230) continue;
-      const result=PG.measureChairToChair(chairRect(A,bp),chairRect(B,bq));
-      drawGap(bp.x,bp.z,bq.x,bq.z,result); }
+      const cands=nearestPerRow(ca,cb).concat(nearestPerRow(cb,ca).map(c=>({p:c.q,q:c.p,d:c.d})));
+      const seen={};
+      cands.forEach(c=>{ if(c.d>230) return; const key=c.p.side+c.p.slot+'|'+c.q.side+c.q.slot; if(seen[key]) return; seen[key]=true;
+        const result=PG.measureChairToChair(chairRect(A,c.p),chairRect(B,c.q));
+        drawGap(c.p.x,c.p.z,c.q.x,c.q.z,result); }); }
     // соседние стулья НА ОДНОМ столе — сгруппированы по рядам (sameTableRuns: сторона или
     // кольцо). Идём вдоль ряда пара за парой; пока зазор совпадает с предыдущим — просто
     // расширяем текущий «отрезок одинаковости»; как только меняется — закрываем отрезок
